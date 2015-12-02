@@ -6,7 +6,7 @@
 
 void configreadererror(const char *str);
 
-/*forward declarations*/
+// forward declarations
 struct config_interfaces *cur_if = 0;
 struct config_ssid *cur_ssid = 0;
 int configreaderlex();
