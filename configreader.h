@@ -8,8 +8,8 @@ struct config_ssid {
     char ssid_name[32];
     char ssid_user[32];
     char ssid_pass[32];
-    char ssid_bssid[25];
-    int ssid_8021x;
+    char ssid_bssid[20];
+    char ssid_auth[10];
     struct config_ssid *next;
 };
 
