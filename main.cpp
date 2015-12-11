@@ -24,7 +24,6 @@
 
 // const char config_file[] = "/etc/wlan-daemon";
 const char config_file[] = "./config"; // debugging
-const struct ifmedia_description ifm_type_descriptions[] = IFM_TYPE_DESCRIPTIONS;
 
 int configreaderparse();
 
@@ -69,6 +68,7 @@ struct config_interfaces *find_config(char *interface) {
 
         if (strcmp(cur->if_name, interface) == 0)
             return cur;
+
         cur = cur->next;
 
     }
@@ -83,10 +83,83 @@ int open_socket(int domain) {
 
 }
 
-// based on ieee80211_listnodes() from ifconfig
-struct config_ssid *first_matching_network(struct ifaddrs *target) {
+const char * check_wlan_mode(ieee80211_nodereq node) {
 
-    struct config_interfaces *config = find_config(target->ifa_name);
+    // check if network requires 802.1x authentication
+    if (node.nr_rsnakms & IEEE80211_WPA_AKM_8021X || node.nr_rsnakms & IEEE80211_WPA_AKM_SHA256_8021X) {
+
+        printf("is 802.1x\n");
+        return "802.1x";
+
+    }
+
+    // check if network requires wpa1 or wpa2 authentication
+    if (node.nr_rsnciphers & IEEE80211_WPA_CIPHER_TKIP || node.nr_rsnciphers & IEEE80211_WPA_CIPHER_CCMP) {
+
+        printf("is wpa\n");
+        return "wpa";
+
+    }
+
+    return NULL;
+
+}
+
+int connectionActive(struct config_interfaces *target, struct config_ssid *match) {
+
+    struct ifreq ifr;
+    struct ieee80211_nwid nwid;
+    struct ifmediareq ifmr;
+    int s = -1;
+
+    s = open_socket(AF_INET);
+
+    if (s < 0) {
+
+        printf("error opening socket: %s\n", strerror(errno));
+        return 0;
+
+    }
+
+    memset(&ifr, 0, sizeof(ifr));
+    ifr.ifr_data = (caddr_t)&nwid;
+    strlcpy(ifr.ifr_name, target->if_name, sizeof(ifr.ifr_name));
+    ioctl(s, SIOCG80211NWID, (caddr_t)&ifr);
+    printf("%s\n", nwid.i_nwid);
+
+    if (strcmp((const char*)nwid.i_nwid, match->ssid_name) != 0) {
+
+        close(s);
+        return 0;
+
+    }
+
+    printf("network matches\n");
+    (void) memset(&ifmr, 0, sizeof(ifmr));
+    (void) strlcpy(ifmr.ifm_name, target->if_name, sizeof(ifmr.ifm_name));
+
+    if (ioctl(s, SIOCGIFMEDIA, (caddr_t)&ifmr) < 0) {
+
+        printf("SIOCGIFMEDIA");
+        close(s);
+        return 0;
+
+    }
+
+    close(s);
+
+    if (ifmr.ifm_status & IFM_ACTIVE) {
+
+        printf("network is active\n");
+        return 1;
+
+    }
+
+    return 0;
+}
+
+// based on ieee80211_listnodes() from ifconfig
+struct config_ssid *first_matching_network(struct config_interfaces *config) {
     struct ieee80211_nodereq_all na;
     struct ieee80211_nodereq nr[512];
     struct ifreq ifr;
@@ -94,8 +167,8 @@ struct config_ssid *first_matching_network(struct ifaddrs *target) {
     int i, s, len;
 
     // open socket and scan for wlans
-    bzero(&ifr, sizeof(ifr));
-    strlcpy(ifr.ifr_name, target->ifa_name, sizeof(ifr.ifr_name));
+    memset(&ifr, 0, sizeof(ifr));
+    strlcpy(ifr.ifr_name, config->if_name, sizeof(ifr.ifr_name));
     s = open_socket(AF_INET);
 
     if (s < 0)
@@ -105,15 +178,20 @@ struct config_ssid *first_matching_network(struct ifaddrs *target) {
 
         printf("error scanning: %s\n", strerror(errno));
         close(s);
+        char command[50];
+        snprintf(command, 50, "ifconfig %s up", config->if_name);
+        printf("%s\n", command);
+        system(command);
+        printf("try bringing up interface\n");
         return NULL;
 
     }
 
-    bzero(&na, sizeof(na));
-    bzero(&nr, sizeof(nr));
+    memset(&na, 0, sizeof(na));
+    memset(&nr, 0, sizeof(nr));
     na.na_node = nr;
     na.na_size = sizeof(nr);
-    strlcpy(na.na_ifname, target->ifa_name, sizeof(na.na_ifname));
+    strlcpy(na.na_ifname, config->if_name, sizeof(na.na_ifname));
 
     if (ioctl(s, SIOCG80211ALLNODES, &na) != 0) {
 
@@ -133,7 +211,7 @@ struct config_ssid *first_matching_network(struct ifaddrs *target) {
     }
 
     // if a wlan we want is found, return
-    for (i = 0; i < na.na_nodes; i++) {
+    for(i = 0; i < na.na_nodes; i++) {
 
         len = nr[i].nr_nwid_len > IEEE80211_NWID_LEN? IEEE80211_NWID_LEN: nr[i].nr_nwid_len;
         snprintf(name, IEEE80211_NWID_LEN, "%.*s", len, nr[i].nr_nwid);
@@ -144,20 +222,11 @@ struct config_ssid *first_matching_network(struct ifaddrs *target) {
             if (strcmp(cur->ssid_name,name) == 0) {
 
                 // get data we need from scan; bssid, wpa mode
-                if(is8021x(nr)) {
-
-                    ether_ntoa((struct ether_addr*)nr->nr_bssid);
-
-                    //bssid
-                    //wpa mode
-
-                }
+                strlcpy(cur->ssid_auth, check_wlan_mode(nr[i]), 10);
                 return cur;
             }
             cur = cur->next;
-
         }
-
     }
 
     return NULL;
@@ -165,54 +234,75 @@ struct config_ssid *first_matching_network(struct ifaddrs *target) {
 }
 
 // code lifted from ifconfig
-const char *get_string(const char *val, const char *sep, u_int8_t *buf, int *lenp)
-{
-    // converted hex value into string
+const char *get_string(const char *val, const char *sep, u_int8_t *buf, int *lenp) {
+
+    // convert hex value into string
     int len = *lenp, hexstr;
     u_int8_t *p = buf;
 
     hexstr = (val[0] == '0' && tolower((u_char)val[1]) == 'x');
+
     if (hexstr)
         val += 2;
+
     for (;;) {
+
         if (*val == '\0')
             break;
+
         if (sep != NULL && strchr(sep, *val) != NULL) {
+
             val++;
             break;
+
         }
         if (hexstr) {
-            if (!isxdigit((u_char)val[0]) ||
-                    !isxdigit((u_char)val[1])) {
+
+            if (!isxdigit((u_char)val[0]) || !isxdigit((u_char)val[1])) {
+
                 return NULL;
+
             }
+
         }
+
         if (p > buf + len) {
+
             if (!hexstr)
                 return NULL;
+
         }
+
         if (hexstr) {
+
 #define	tohex(x)	(isdigit(x) ? (x) - '0' : tolower(x) - 'a' + 10)
-            *p++ = (tohex((u_char)val[0]) << 4) |
+*p++ = (tohex((u_char)val[0]) << 4) |
                     tohex((u_char)val[1]);
 #undef tohex
             val += 2;
+
         } else {
-            if (*val == '\\' &&
-                    sep != NULL && strchr(sep, *(val + 1)) != NULL)
+
+            if (*val == '\\' && sep != NULL && strchr(sep, *(val + 1)) != NULL)
                 val++;
+
             *p++ = *val++;
+
         }
+
     }
+
     len = p - buf;
+
     if (len < *lenp)
         memset(p, 0, *lenp - len);
+
     *lenp = len;
     return val;
 }
 
 // based on ifconfig code
-int set_network_id(char *network_ssid, struct ifaddrs *target) {
+int set_network_id(char *network_ssid, struct config_interfaces *target) {
 
     int s = -1, res, size;
     struct ifreq ifr;
@@ -233,7 +323,7 @@ int set_network_id(char *network_ssid, struct ifaddrs *target) {
     size = sizeof(nwid.i_nwid);
     get_string(network_ssid, NULL, nwid.i_nwid, &size);
     nwid.i_len = size;
-    strlcpy(ifr.ifr_name, target->ifa_name, sizeof(ifr.ifr_name));
+    strlcpy(ifr.ifr_name, target->if_name, sizeof(ifr.ifr_name));
     ifr.ifr_data = (caddr_t)&nwid;
     res = ioctl(s, SIOCS80211NWID, (caddr_t)&ifr);
     close(s);
@@ -245,7 +335,106 @@ int set_network_id(char *network_ssid, struct ifaddrs *target) {
 
 }
 
-int set_psk_key(char *nwid, char *psk_key, struct ifaddrs *target) {
+int set_wep_key(char *wep_key, struct config_interfaces *target) {
+
+    int s = -1, res, size;
+    struct ieee80211_nwkey nwkey;
+    u_int8_t keybuffer[IEEE80211_WEP_NKID][16];
+
+    if (!target)
+        return 1;
+
+    s = open_socket(AF_INET);
+
+    if (!s) {
+        printf("socket error: %s\n", strerror(errno));
+        return 1;
+    }
+
+    memset(&nwkey, 0, sizeof(nwkey));
+    memset(&keybuffer, 0, sizeof(keybuffer));
+
+    nwkey.i_wepon = IEEE80211_NWKEY_WEP;
+    nwkey.i_defkid = 1;
+
+    if (isdigit((unsigned char)wep_key[0]) && wep_key[1] == ':') {
+
+        /* specifying a full set of four keys */
+        nwkey.i_defkid = wep_key[0] - '0';
+        wep_key += 2;
+
+        for (int i = 0; i < IEEE80211_WEP_NKID; i++) {
+
+            size = sizeof(keybuffer[i]);
+            get_string(wep_key, ",", keybuffer[i], &size);
+
+            if (wep_key == NULL)
+                return 1;
+
+            nwkey.i_key[i].i_keylen = size;
+            nwkey.i_key[i].i_keydat = keybuffer[i];
+
+        }
+
+        if (*wep_key != '\0') {
+
+            printf("wep key error: %s\n", strerror(errno));
+            return 1;
+
+        }
+
+    } else {
+
+        int j;
+        char *tmp = NULL;
+        size_t vlen = strlen(wep_key);
+
+        if(sizeof(vlen) == (10 || 26)) {
+
+            // key is a hex, need to remove 0x
+            j = asprintf(&tmp, "0x%s", wep_key);
+
+            if (j == -1) {
+
+                printf("memory allocation error: %s\n", strerror(errno));
+                return 1;
+
+            }
+
+            wep_key = tmp;
+
+        } else if(sizeof(vlen) == (5 || 13)) {
+
+            // key is a 0xkey or string
+
+        } else {
+
+            printf("wep key length error: %s\n", strerror(errno));
+            return 1;
+
+        }
+
+        size = sizeof(keybuffer[0]);
+        get_string(wep_key, NULL, keybuffer[0], &size);
+        free(tmp);
+
+        if (wep_key == NULL)
+            return 1;
+
+        nwkey.i_key[0].i_keylen = size;
+        nwkey.i_key[0].i_keydat = keybuffer[0];
+
+    }
+
+    strlcpy(nwkey.i_name, target->if_name, sizeof(nwkey.i_name));
+    res = ioctl(s, SIOCS80211NWKEY, (caddr_t)&nwkey);
+
+    if (res)
+        printf("res: %d (%s)\n", res, strerror(errno));
+
+}
+
+int set_psk_key(char *nwid, char *psk_key, struct config_interfaces *target) {
 
     int s = -1, res, size;
     struct ieee80211_wpapsk psk;
@@ -257,13 +446,14 @@ int set_psk_key(char *nwid, char *psk_key, struct ifaddrs *target) {
 
     s = open_socket(AF_INET);
 
-    if (s == -1) {
+    if (!s) {
         printf("socket error: %s\n", strerror(errno));
         return 1;
     }
 
     memset(&psk, 0, sizeof(psk));
     size = strlen(psk_key);
+
     if(size == 2 + 2 * sizeof(psk.i_psk) && psk_key[0] == '0' && psk_key[1] == 'x') {
 
         // already a wpa hex key
@@ -271,71 +461,93 @@ int set_psk_key(char *nwid, char *psk_key, struct ifaddrs *target) {
 
     } else {
 
-        // this is a string
+        // this is a string, hash it
         if(size < 8 || size > 63)
             return 1;
+
         pkcs5_pbkdf2(psk_key, size, (uint8_t*)nwid, strlen(nwid), psk.i_psk, sizeof(psk.i_psk), 4096);
 
     }
 
     psk.i_enabled = 1;
-    strlcpy(psk.i_name, target->ifa_name, sizeof(psk.i_name));
+    strlcpy(psk.i_name, target->if_name, sizeof(psk.i_name));
     ifr.ifr_data = (caddr_t)&psk;
     res = ioctl(s, SIOCS80211WPAPSK, (caddr_t)&psk);
 
     if (res)
         printf("res: %d (%s)\n", res, strerror(errno));
 
-    strlcpy(wpa.i_name, target->ifa_name, sizeof(wpa.i_name));
+    strlcpy(wpa.i_name, target->if_name, sizeof(wpa.i_name));
     ifr.ifr_data = (caddr_t)&wpa;
 
     res = ioctl(s, SIOCG80211WPAPARMS, (caddr_t)&wpa);
-    if (res)
-        printf("res: %d (%s)\n", res, strerror(errno));
 
-    res = ioctl(s, SIOCS80211WPAPARMS, (caddr_t)&wpa);
     if (res)
         printf("res: %d (%s)\n", res, strerror(errno));
 
     wpa.i_enabled = psk.i_enabled;
+    res = ioctl(s, SIOCS80211WPAPARMS, (caddr_t)&wpa);
+
+    if (res)
+        printf("res: %d (%s)\n", res, strerror(errno));
+
     close(s);
     return res < 0;
 
 }
 
-int set_bssid(char *network_bssid, struct ifaddrs *target) {
+int set_bssid(char *network_bssid, struct config_interfaces *target) {
 
     int s = -1, res;
     struct ieee80211_bssid bssid;
     struct ether_addr *ea;
 
     ea = ether_aton(network_bssid);
+
+    if (!ea) {
+
+        printf("invalid ethernet address\n");
+        return 1;
+
+    }
+
     memcpy(&bssid.i_bssid, ea->ether_addr_octet, sizeof(bssid.i_bssid));
-    strlcpy(bssid.i_name, target->ifa_name, sizeof(bssid.i_name));
+    strlcpy(bssid.i_name, target->if_name, sizeof(bssid.i_name));
     s = open_socket(AF_INET);
+
+    if (!s) {
+        printf("error opening socket: %s\n", strerror(errno));
+        return 1;
+    }
+
     res = ioctl(s, SIOCS80211BSSID, &bssid);
     close(s);
 
-    return 0;
+    return res;
 
 }
 
-int set_wpa8021x() {
+int set_wpa8021x(struct config_interfaces *target) {
 
-    //    int s = -1;
-    //    struct ieee80211_wpaparams wpa;
+    int res, s = -1;
+    struct ieee80211_wpaparams wpa;
+    struct ifreq ifr;
 
-    //    s = open_socket(AF_INET);
-    //    strlcpy(wpa.i_name, target->ifa_name, sizeof(wpa.i_name));
-    //    ifr.ifr_data = (caddr_t)&wpa;
-    //    res = ioctl(s, SIOCG80211WPAPARMS, (caddr_t)&wpa);
-    //    if (res)
-    //        printf("res: %d (%s)\n", res, strerror(errno));
-    //    res = ioctl(s, SIOCS80211WPAPARMS, (caddr_t)&wpa);
-    //    if (res)
-    //        printf("res: %d (%s)\n", res, strerror(errno));
-    //    wpa.i_akms = EEE80211_WPA_AKM_8021X;
-    //    close(s);
+    s = open_socket(AF_INET);
+    strlcpy(wpa.i_name, target->if_name, sizeof(wpa.i_name));
+    ifr.ifr_data = (caddr_t)&wpa;
+    res = ioctl(s, SIOCG80211WPAPARMS, (caddr_t)&wpa);
+
+    if (res)
+        printf("res: %d (%s)\n", res, strerror(errno));
+
+    res = ioctl(s, SIOCS80211WPAPARMS, (caddr_t)&wpa);
+
+    if (res)
+        printf("res: %d (%s)\n", res, strerror(errno));
+
+    wpa.i_akms = IEEE80211_WPA_AKM_8021X;
+    close(s);
 
     return 0;
 
@@ -353,45 +565,54 @@ int start_wpa_supplicant() {
 
 }
 
-void start_dhclient(struct ifaddrs *target) {
+void start_dhclient(struct config_interfaces *target) {
 
     char command[50];
-    sprintf(command, "dhclient %s", target->ifa_name);
+    snprintf(command, 50, "dhclient %s", target->if_name);
     printf("%s\n", command);
     system(command);
     printf("finished with dhclient\n");
 
 }
 
-void setup_wlaninterface(struct ifaddrs *cur) {
+void setup_wlaninterface(struct config_interfaces *target) {
 
-    printf("setting up interface: %s\n", cur->ifa_name);
-    struct config_ssid *match = first_matching_network(cur);
+    struct config_ssid *match = first_matching_network(target);
 
-    if (match) {
+    if (!match || connectionActive(target, match))
+        return;
 
-        printf("network found: %s\n", match->ssid_name);
-        set_network_id((char*)match->ssid_name, cur);
+    printf("setting up network: %s\n", match->ssid_name);
+    set_network_id((char*)match->ssid_name, target);
 
-        if (match->ssid_8021x) {
 
-            set_bssid((char*)match->ssid_bssid, cur);
-            set_wpa8021x();
-            start_wpa_supplicant();
+    printf("%s\n", match->ssid_auth);
 
-        } else {
+    if (strcmp(match->ssid_auth, "802.1x") == 0) {
 
-            set_psk_key((char*)match->ssid_name, (char*)match->ssid_pass, cur);
+        printf("do 8021x stuff\n");
+        set_bssid((char*)match->ssid_bssid, target);
+        set_wpa8021x(target);
+        start_wpa_supplicant();
 
-        }
+    } else if(strcmp(match->ssid_auth, "wpa") == 0) {
 
-        start_dhclient(cur);
+        printf("do wpa stuff\n");
+        set_psk_key((char*)match->ssid_name, (char*)match->ssid_pass, target);
+
+    } else {
+
+        // wep mode stuff
+        set_wep_key((char*)match->ssid_pass, target);
+        printf("do wep stuff\n");
 
     }
 
+    start_dhclient(target);
+
 }
 
-void setup_ethernetinterface(struct ifaddrs *cur) {
+void setup_ethernetinterface(struct config_interfaces *cur) {
 
     // do all the stuff
 
@@ -399,32 +620,50 @@ void setup_ethernetinterface(struct ifaddrs *cur) {
 
 
 // if interface is already running, returns 0
-int check_interface(struct ifaddrs *cur) {
+int check_interface(struct config_interfaces *cur) {
 
-    //    if (cur->ifa_flags & IFF_RUNNING) {
-    //        printf("%s already running\n", cur->ifa_name);
-    //        return 1;
-    //    }
+    int if_found = 0;
+    int if_hasaddr = 0;
+    struct ifaddrs *interfaces, *chk;
 
-    if (find_config(cur->ifa_name))
-        return 1;
+    // ask the OS what interfaces are there
+    int err = getifaddrs(&interfaces);
 
-    return 0;
+    if (err) {
 
-}
+        printf("error getting interfaces: %d\n", err);
+        printf("%s\n", strerror(err));
+        return 0;
 
-int is8021x(ieee80211_nodereq node) {
+    }
 
-    // check if network requires 802.1x authentication
-    if (node->nr_rsnakms & IEEE80211_WPA_AKM_8021X || node->nr_rsnakms & IEEE80211_WPA_AKM_SHA256_8021X)
-        return 1;
+    chk = interfaces;
 
-    return 0;
+    while(chk) {
 
+        if (strcmp(cur->if_name,chk->ifa_name) != 0) {
+
+            chk = chk->ifa_next;
+            continue;
+
+        }
+
+        if_found = 1;
+
+        if (chk->ifa_addr->sa_family == AF_INET || chk->ifa_addr->sa_family == AF_INET6)
+            if_hasaddr = 1;
+
+        chk = chk->ifa_next;
+    }
+
+    freeifaddrs(interfaces);
+    return if_hasaddr;
+    //return if_found && !if_hasaddr;
 }
 
 const char * mediatype(char *interface) {
 
+    const struct ifmedia_description ifm_type_descriptions[] = IFM_TYPE_DESCRIPTIONS;
     struct ifmediareq ifmr;
     const struct ifmedia_description *desc;
     int *media_list, s;
@@ -448,7 +687,7 @@ const char * mediatype(char *interface) {
 
     }
 
-    return ("<unknown type>");
+    return ("Invalid interface type");
 
 }
 
@@ -457,49 +696,38 @@ int main(int count, char **options) {
     int running = 1;
 
     if (parse_config()) {
+
         printf("error reading configuration!\n");
         return 1;
+
     }
 
     while (running) {
 
-        struct ifaddrs *interfaces, *cur;
+        struct config_interfaces *cur = config;
 
-        // ask the OS what interfaces are there
-        int err = getifaddrs(&interfaces);
-
-        if (err) {
-
-            printf("error getting interfaces: %d\n", err);
-            printf("%s\n", strerror(err));
-            return err;
-
-        }
-
-        cur = interfaces;
         while (cur) {
 
             if (check_interface(cur)) {
 
-                printf("media type: %s\n", mediatype(cur->ifa_name));
+                printf("media type: %s\n", mediatype(cur->if_name));
 
-                if(strcmp(mediatype(cur->ifa_name), "Ethernet") == 0) {
+                if(strcmp(mediatype(cur->if_name), "Ethernet") == 0) {
 
                     setup_ethernetinterface(cur);
 
-                } else if(strcmp(mediatype(cur->ifa_name), "IEEE802.11") == 0) {
+                } else if(strcmp(mediatype(cur->if_name), "IEEE802.11") == 0) {
 
                     setup_wlaninterface(cur);
 
                 }
             }
 
-            cur = cur->ifa_next;
+            cur = cur->next;
         }
 
         printf("Sleeping...\n");
         sleep(10);
-        freeifaddrs(interfaces);
         printf("restarto\n");
 
     }
