@@ -105,11 +105,10 @@ const char * check_wlan_mode(ieee80211_nodereq node) {
 
 }
 
-int connectionActive(struct config_interfaces *target, struct config_ssid *match) {
+int network_matches(struct config_interfaces *target, struct config_ssid *match) {
 
     struct ifreq ifr;
     struct ieee80211_nwid nwid;
-    struct ifmediareq ifmr;
     int s = -1;
 
     s = open_socket(AF_INET);
@@ -127,14 +126,26 @@ int connectionActive(struct config_interfaces *target, struct config_ssid *match
     ioctl(s, SIOCG80211NWID, (caddr_t)&ifr);
     printf("%s\n", nwid.i_nwid);
 
-    if (strcmp((const char*)nwid.i_nwid, match->ssid_name) != 0) {
 
-        close(s);
-        return 0;
+    close(s);
+    return strcmp((const char*)nwid.i_nwid, match->ssid_name) == 0;
+
+}
+
+
+int connection_active(struct config_interfaces *target) {
+
+    struct ifmediareq ifmr;
+    int s = -1;
+
+    s = open_socket(AF_INET);
+
+    if(s < 0) {
+
+        printf("error opening socket: %s\n", strerror(errno));
 
     }
 
-    printf("network matches\n");
     (void) memset(&ifmr, 0, sizeof(ifmr));
     (void) strlcpy(ifmr.ifm_name, target->if_name, sizeof(ifmr.ifm_name));
 
@@ -276,7 +287,7 @@ const char *get_string(const char *val, const char *sep, u_int8_t *buf, int *len
         if (hexstr) {
 
 #define	tohex(x)	(isdigit(x) ? (x) - '0' : tolower(x) - 'a' + 10)
-*p++ = (tohex((u_char)val[0]) << 4) |
+            *p++ = (tohex((u_char)val[0]) << 4) |
                     tohex((u_char)val[1]);
 #undef tohex
             val += 2;
@@ -577,9 +588,13 @@ void start_dhclient(struct config_interfaces *target) {
 
 void setup_wlaninterface(struct config_interfaces *target) {
 
+    int retries = 3;
     struct config_ssid *match = first_matching_network(target);
 
-    if (!match || connectionActive(target, match))
+    if (!match)
+        return;
+
+    if(network_matches(target, match) && connection_active(target))
         return;
 
     printf("setting up network: %s\n", match->ssid_name);
@@ -609,6 +624,20 @@ void setup_wlaninterface(struct config_interfaces *target) {
     }
 
     start_dhclient(target);
+
+    while(retries != 0) {
+
+        if(!connection_active(target)) {
+
+            printf("not active, waiting...\n");
+            sleep(10);
+
+        } else
+            return;
+
+        retries--;
+
+    }
 
 }
 
@@ -657,8 +686,8 @@ int check_interface(struct config_interfaces *cur) {
     }
 
     freeifaddrs(interfaces);
-    return if_hasaddr;
-    //return if_found && !if_hasaddr;
+    //return if_hasaddr;
+    return if_found && (!connection_active(cur) || !if_hasaddr);
 }
 
 const char * mediatype(char *interface) {
