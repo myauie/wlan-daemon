@@ -17,7 +17,7 @@ int configreaderlex();
     char *str;
 };
 
-%token STRING OPEN_BRACE CLOSE_BRACE USER PASS
+%token STRING OPEN_BRACE CLOSE_BRACE USER PASS IPV6AUTO
 %type <str> STRING
 
 %%
@@ -41,7 +41,7 @@ interface_name: STRING
     
 ssid_set: ssid_set ssid_spec | ssid_spec
     
-ssid_spec: ssid_name OPEN_BRACE ssid_options CLOSE_BRACE
+ssid_spec: ssid_name OPEN_BRACE CLOSE_BRACE | ssid_name OPEN_BRACE ssid_options CLOSE_BRACE
 
 ssid_name: STRING
 	{
@@ -58,7 +58,7 @@ ssid_name: STRING
     
 ssid_options: ssid_options ssid_option | ssid_option
     
-ssid_option: user_name | password
+ssid_option: user_name | password | ipv6
 
 user_name: USER STRING
 	{
@@ -69,6 +69,11 @@ password: PASS STRING
 	{
                 strlcpy(cur_ssid->ssid_pass, $2, 32);
 	}
+
+ipv6: IPV6AUTO
+        {
+               cur_ssid->ipv6_auto = true;
+        }
 
 %%
 

@@ -564,6 +564,28 @@ int set_wpa8021x(struct config_interfaces *target) {
 
 }
 
+int set_ipv6_auto(struct config_interfaces *target) {
+    int res, s = -1;
+    struct ifreq ifr;
+
+    s = open_socket(AF_INET6);
+    strlcpy(ifr.ifr_name, target->if_name, sizeof(ifr.ifr_name));
+    res = ioctl(s, SIOCGIFXFLAGS, (caddr_t)&ifr);
+
+    if (res)
+        printf("res: %d (%s)\n", res, strerror(errno));
+
+    ifr.ifr_flags |= IFXF_AUTOCONF6;
+    res = ioctl(s, SIOCSIFXFLAGS, (caddr_t)&ifr);
+
+    if (res)
+        printf("res: %d (%s)\n", res, strerror(errno));
+
+    close(s);
+
+    return 0;
+}
+
 int start_wpa_supplicant() {
 
     //    if(fork() == 0) {
@@ -622,6 +644,9 @@ void setup_wlaninterface(struct config_interfaces *target) {
         printf("do wep stuff\n");
 
     }
+	
+	if (match->ipv6_auto)
+        set_ipv6_auto(target);
 
     start_dhclient(target);
 

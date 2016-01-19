@@ -15,6 +15,7 @@ extern YYSTYPE configreaderlval;
 
 \{			return OPEN_BRACE;
 \}			return CLOSE_BRACE;
+autoipv6		return IPV6AUTO;
 user:			return USER;
 pass:			return PASS;
 \".*\"			{

@@ -10,6 +10,7 @@ struct config_ssid {
     char ssid_pass[32];
     char ssid_bssid[20];
     char ssid_auth[10];
+    bool ipv6_auto;
     struct config_ssid *next;
 };
 
