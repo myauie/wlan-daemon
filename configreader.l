@@ -5,9 +5,9 @@
 
 #include <stdio.h>
 #include <string.h>
-#include "configreader_yacc.h"
+#include "y.tab.h"
 
-extern YYSTYPE configreaderlval;
+extern YYSTYPE yylval;
 
 %}
 
@@ -19,11 +19,11 @@ autoipv6		return IPV6AUTO;
 user:			return USER;
 pass:			return PASS;
 \".*\"			{
-				configreaderlval.str = (char*)calloc(strlen(configreadertext)-1, sizeof(char));
-				strncpy(configreaderlval.str, &configreadertext[1], strlen(configreadertext)-2);
+				yylval.str = (char*)calloc(strlen(yytext)-1, sizeof(char));
+				strncpy(yylval.str, &yytext[1], strlen(yytext)-2);
 				return STRING;
 			}
-[A-Za-z0-9_-]*		configreaderlval.str = strdup(configreadertext); return STRING;
+[A-Za-z0-9_-]*		yylval.str = strdup(yytext); return STRING;
 
 %%
 

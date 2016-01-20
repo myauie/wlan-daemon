@@ -1,5 +1,6 @@
 #ifndef CONFIGREADER_H
 #define CONFIGREADER_H
+#include <stdbool.h>
 
 /*forward declarations*/
 extern FILE *configreaderin;

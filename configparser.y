@@ -4,12 +4,12 @@
 
 #include "configreader.h"
 
-void configreadererror(const char *str);
+void yyerror(const char *str);
 
 // forward declarations
 struct config_interfaces *cur_if = 0;
 struct config_ssid *cur_ssid = 0;
-int configreaderlex();
+int yylex();
 
 %}
 
@@ -77,7 +77,7 @@ ipv6: IPV6AUTO
 
 %%
 
-void configreadererror(const char *str) {
+void yyerror(const char *str) {
 	printf("error: %s", str);
 	exit(1);
 }

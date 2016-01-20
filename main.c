@@ -20,12 +20,13 @@
 #include <netinet/if_ether.h>
 
 #include "configreader.h"
-#include "configreader_yacc.h"
+#include "y.tab.h"
 
 // const char config_file[] = "/etc/wlan-daemon";
 const char config_file[] = "./config"; // debugging
 
-int configreaderparse();
+int yyparse();
+FILE *yyin;
 
 int parse_config() {
 
@@ -34,8 +35,8 @@ int parse_config() {
     if (!fp)
         return 1;
 
-    configreaderin = fp;
-    configreaderparse();
+    yyin = fp;
+    yyparse();
     fclose(fp);
 
     struct config_interfaces *cur = config;
@@ -83,7 +84,7 @@ int open_socket(int domain) {
 
 }
 
-const char * check_wlan_mode(ieee80211_nodereq node) {
+const char * check_wlan_mode(struct ieee80211_nodereq node) {
 
     // check if network requires 802.1x authentication
     if (node.nr_rsnakms & IEEE80211_WPA_AKM_8021X || node.nr_rsnakms & IEEE80211_WPA_AKM_SHA256_8021X) {
@@ -348,7 +349,7 @@ int set_network_id(char *network_ssid, struct config_interfaces *target) {
 
 int set_wep_key(char *wep_key, struct config_interfaces *target) {
 
-    int s = -1, res, size;
+    int i, s = -1, res, size;
     struct ieee80211_nwkey nwkey;
     u_int8_t keybuffer[IEEE80211_WEP_NKID][16];
 
@@ -374,7 +375,7 @@ int set_wep_key(char *wep_key, struct config_interfaces *target) {
         nwkey.i_defkid = wep_key[0] - '0';
         wep_key += 2;
 
-        for (int i = 0; i < IEEE80211_WEP_NKID; i++) {
+        for (i = 0; i < IEEE80211_WEP_NKID; i++) {
 
             size = sizeof(keybuffer[i]);
             get_string(wep_key, ",", keybuffer[i], &size);
