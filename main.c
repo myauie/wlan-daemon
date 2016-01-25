@@ -27,6 +27,7 @@ const char config_file[] = "./config"; // debugging
 
 int yyparse();
 FILE *yyin;
+int supplicant_pid = 0;
 
 int parse_config() {
 
@@ -234,11 +235,31 @@ struct config_ssid *first_matching_network(struct config_interfaces *config) {
             if (strcmp(cur->ssid_name,name) == 0) {
 
                 // get data we need from scan; bssid, wpa mode
-                strlcpy(cur->ssid_auth, check_wlan_mode(nr[i]), 10);
+				snprintf(cur->ssid_bssid, sizeof(cur->ssid_bssid), "%.*s", IEEE80211_ADDR_LEN, nr[i].nr_bssid);
+				
+				if (nr[i].nr_rsnciphers & IEEE80211_WPA_CIPHER_CCMP || nr[i].nr_rsnciphers & IEEE80211_WPA_CIPHER_TKIP)
+					strlcpy(cur->ssid_auth, "wpa", sizeof(cur->ssid_auth));
+					
+				else
+					strlcpy(cur->ssid_auth, "wep", sizeof(cur->ssid_auth));
+
+				if (nr[i].nr_rsnakms & IEEE80211_WPA_AKM_8021X || nr[i].nr_rsnakms & IEEE80211_WPA_AKM_SHA256_8021X) {
+				
+					struct ether_addr ea;
+
+					memcpy(&ea.ether_addr_octet, nr[i].nr_bssid, sizeof(ea.ether_addr_octet));
+					strlcpy(cur->ssid_bssid, ether_ntoa(&ea), sizeof(cur->ssid_bssid));
+					strlcpy(cur->ssid_auth, "802.1x", sizeof(cur->ssid_auth));
+					
+				}
+
                 return cur;
             }
+			
             cur = cur->next;
+			
         }
+		
     }
 
     return NULL;
@@ -514,11 +535,12 @@ int set_bssid(char *network_bssid, struct config_interfaces *target) {
     struct ieee80211_bssid bssid;
     struct ether_addr *ea;
 
+	printf("set bssid: %s\n", network_bssid);
     ea = ether_aton(network_bssid);
 
     if (!ea) {
 
-        printf("invalid ethernet address\n");
+		printf("invalid ethernet address: %s\n", network_bssid);
         return 1;
 
     }
@@ -552,13 +574,13 @@ int set_wpa8021x(struct config_interfaces *target) {
 
     if (res)
         printf("res: %d (%s)\n", res, strerror(errno));
-
+		
+	wpa.i_akms = IEEE80211_WPA_AKM_8021X;
     res = ioctl(s, SIOCS80211WPAPARMS, (caddr_t)&wpa);
 
     if (res)
         printf("res: %d (%s)\n", res, strerror(errno));
 
-    wpa.i_akms = IEEE80211_WPA_AKM_8021X;
     close(s);
 
     return 0;
@@ -589,14 +611,29 @@ int set_ipv6_auto(struct config_interfaces *target) {
 
 int start_wpa_supplicant() {
 
-    //    if(fork() == 0) {
+	// wpa_supplicant already running
+	if (supplicant_pid)
+		return 0;
 
-    //        exec("/etc/wpa_supplicant");
-
-    //    }
-
-    return 0;
-
+	supplicant_pid = fork();
+	
+	// parent
+	if (supplicant_pid) {
+	
+		printf("forked, pid=%d\n", supplicant_pid);
+		return 0;
+		
+	// child
+	} else {
+	
+	char interface[20];
+	snprintf(interface, 20, "-i %s", target->if_name);
+	execl("/usr/local/sbin/wpa_supplicant", "-D openbsd", interface, "-c /etc/wpa_supplicant.conf", 0);
+	printf("wpa_supplicant error\n");
+	exit(1);
+		
+	}
+	
 }
 
 void start_dhclient(struct config_interfaces *target) {
