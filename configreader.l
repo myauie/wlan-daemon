@@ -18,6 +18,9 @@ extern YYSTYPE yylval;
 autoipv6		return IPV6AUTO;
 user:			return USER;
 pass:			return PASS;
+eap:            	return EAP;
+key-mgmt:       	return KEY;
+identity:       	return IDENTITY;
 \".*\"			{
 				yylval.str = (char*)calloc(strlen(yytext)-1, sizeof(char));
 				strncpy(yylval.str, &yytext[1], strlen(yytext)-2);

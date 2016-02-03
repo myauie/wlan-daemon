@@ -1,4 +1,5 @@
 %{
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -17,7 +18,7 @@ int yylex();
     char *str;
 };
 
-%token STRING OPEN_BRACE CLOSE_BRACE USER PASS IPV6AUTO
+%token STRING OPEN_BRACE CLOSE_BRACE USER PASS IPV6AUTO EAP KEY IDENTITY
 %type <str> STRING
 
 %%
@@ -41,7 +42,7 @@ interface_name: STRING
     
 ssid_set: ssid_set ssid_spec | ssid_spec
     
-ssid_spec: ssid_name OPEN_BRACE CLOSE_BRACE | ssid_name OPEN_BRACE ssid_options CLOSE_BRACE
+ssid_spec: ssid_name OPEN_BRACE ssid_options CLOSE_BRACE
 
 ssid_name: STRING
 	{
@@ -58,7 +59,7 @@ ssid_name: STRING
     
 ssid_options: ssid_options ssid_option | ssid_option
     
-ssid_option: user_name | password | ipv6
+ssid_option: user_name | password | identity | eap | key_mgmt | ipv6
 
 user_name: USER STRING
 	{
@@ -69,6 +70,21 @@ password: PASS STRING
 	{
                 strlcpy(cur_ssid->ssid_pass, $2, 32);
 	}
+
+identity: IDENTITY STRING
+        {
+                strlcpy(cur_ssid->ssid_identity, $2, 32);
+        }
+
+eap: EAP STRING
+        {
+                strlcpy(cur_ssid->ssid_eap, $2, 40);
+        }
+
+key_mgmt: KEY STRING
+        {
+                strlcpy(cur_ssid->ssid_key_mgmt, $2, 20);
+        }
 
 ipv6: IPV6AUTO
         {

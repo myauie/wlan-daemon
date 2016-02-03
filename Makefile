@@ -1,9 +1,9 @@
 TARGET = wlan-daemon
 LEX = lex
 YACC = yacc -d
-OBJS = lex.yy.o y.tab.o main.o  
+OBJS = lex.yy.o y.tab.o wpa_ctrl.o os_unix.o main.o
 LDFLAGS = -lfl -lutil
-CFLAGS = -std=c99
+CFLAGS = -std=c99 -DCONFIG_CTRL_IFACE -DCONFIG_CTRL_IFACE_UNIX
 
 all: $(TARGET)
 

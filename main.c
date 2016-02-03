@@ -1,33 +1,35 @@
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
 #include <errno.h>
+#include <ifaddrs.h>
+#include <util.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <net/if_media.h>
-#include <ifaddrs.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
+#include <netinet/if_ether.h>
 #include <net80211/ieee80211.h>
 #include <net80211/ieee80211_ioctl.h>
-#include <util.h>
-#include <netinet/if_ether.h>
-
 #include "configreader.h"
 #include "y.tab.h"
+#include "wpa_ctrl.h"
 
-// const char config_file[] = "/etc/wlan-daemon";
-const char config_file[] = "./config"; // debugging
-
+// const char config_file[] = "/etc/wlan-daemon/wlan-daemon.config";
+const char config_file[] = "./wlan-daemon.config"; // debugging
+char wpa_daemon_ctrl[] = "/var/run/wlan-daemon";
 int yyparse();
 FILE *yyin;
-int supplicant_pid = 0;
+pid_t supplicant_pid = 0;
+struct wpa_ctrl *wpa_client = 0;
 
 int parse_config() {
 
@@ -611,29 +613,144 @@ int set_ipv6_auto(struct config_interfaces *target) {
 
 int start_wpa_supplicant() {
 
-	// wpa_supplicant already running
-	if (supplicant_pid)
-		return 0;
+    // if pid is non-zero, wpa_supplicant already running
+    if (supplicant_pid)
+        return 0;
 
-	supplicant_pid = fork();
-	
-	// parent
-	if (supplicant_pid) {
-	
-		printf("forked, pid=%d\n", supplicant_pid);
-		return 0;
+    // fork wpa_supplicant as child process and assign its pid to supplicant_pid
+    switch(supplicant_pid = fork()) {
+
+    case -1: // error
+
+        printf("error forking: %s\n", strerror(errno));
+
+    case 0: { // child
 		
-	// child
-	} else {
-	
-	char interface[20];
-	snprintf(interface, 20, "-i %s", target->if_name);
-	execl("/usr/local/sbin/wpa_supplicant", "-D openbsd", interface, "-c /etc/wpa_supplicant.conf", 0);
-	printf("wpa_supplicant error\n");
-	exit(1);
+        int if_count, arg = 0;
+        char **args;
+        struct config_interfaces *cur;
+
+        for(cur = config; cur; cur = cur->next) if_count++;
+
+        args = malloc(sizeof(char*) * ((if_count * 5 + 1)));
+        args[arg++] = "wpa_supplicant";
+
+        for(cur = config; cur; cur = cur->next) {
+            args[arg++] = "-i";
+            args[arg++] = cur->if_name;
+            args[arg++] = "-C";
+            args[arg++] = wpa_daemon_ctrl;
+            args[arg++] = "-N";
+        }
+        args[--arg] = 0;
+
+        execv("/usr/local/sbin/wpa_supplicant", args);
+		printf("wpa_supplicant error\n");
+		exit(1);
+
+        }
+
+    default: { // parent
+
+        printf("forked, pid=%d\n", supplicant_pid);
+        return 0;
 		
-	}
-	
+        }
+    }
+}
+
+void wpa_unsolicited(char *msg, size_t len) {
+
+    printf("wpa_unsolicited_message: %s\n", msg);
+    
+}
+
+int sup_cmd(char *result, char *cmd, ...) {
+
+    va_list args;
+    int res;
+    char cmdbuf[256];
+    size_t replen = 256;
+
+    if (!wpa_client)
+        return -1; // not attached
+
+    va_start(args, cmd);
+    vsnprintf(cmdbuf, 256, cmd, args);
+    va_end(args);
+
+    printf("%s (%d)\n", cmdbuf, strlen(cmdbuf));
+    res = wpa_ctrl_request(wpa_client, cmdbuf, strlen(cmdbuf), result, &replen, wpa_unsolicited);
+    printf("%s (%d)\n", result, res);
+    if (res) return res;
+    
+}
+
+int config_wpa_supplicant(struct config_interfaces *target, struct config_ssid *match) {
+
+    char unixsock[256], repbuf[256];
+    int res, network_number = -1;
+
+    snprintf(unixsock, 256, "%s/%s", wpa_daemon_ctrl, target->if_name);
+    printf("starting wpa_supplicant conversation\n");
+
+    if (!wpa_client)
+        wpa_client = wpa_ctrl_open(unixsock);
+
+    if (!wpa_client) {
+        printf("failed to create wpa_supplicant connection\n");
+        return 0;
+    }
+
+    res = sup_cmd(repbuf, "ADD_NETWORK");
+    if (res < 0)
+        return res;
+
+    sscanf(repbuf, "%d", &network_number);
+    if (network_number < 0)
+        return -1; // failed to create new network
+
+    if (match->ssid_identity) {
+        res = sup_cmd(repbuf, "SET_NETWORK %d identity \"%s\"", network_number,
+                      match->ssid_identity);
+        if (res < 0)
+            return res;
+    }
+
+    if (match->ssid_user) {
+        res = sup_cmd(repbuf, "SET_NETWORK %d user \"%s\"", network_number,
+                      match->ssid_user);
+        if (res < 0)
+            return res;
+    }
+
+    if (match->ssid_identity) {
+        res = sup_cmd(repbuf, "SET_NETWORK %d key_mgmt %s", network_number,
+                      match->ssid_key_mgmt);
+        if (res < 0)
+            return res;
+    }
+
+    if (match->ssid_identity) {
+        res = sup_cmd(repbuf, "SET_NETWORK %d eap %s", network_number,
+                      match->ssid_eap);
+        if (res < 0)
+            return res;
+    }
+
+    res = sup_cmd(repbuf, "SET_NETWORK %d password \"%s\"", network_number,
+                  match->ssid_pass);
+    if (res < 0)
+        return res;
+
+    res = sup_cmd(repbuf, "SET_NETWORK %d ssid \"%s\"", network_number,
+                  match->ssid_name);
+    if (res < 0)
+        return res;
+
+    wpa_ctrl_close(wpa_client);
+    wpa_client = 0;
+
 }
 
 void start_dhclient(struct config_interfaces *target) {
@@ -668,11 +785,13 @@ void setup_wlaninterface(struct config_interfaces *target) {
         printf("do 8021x stuff\n");
         set_bssid((char*)match->ssid_bssid, target);
         set_wpa8021x(target);
-        start_wpa_supplicant();
+        start_wpa_supplicant(target);
+        config_wpa_supplicant(target, match);
 
     } else if(strcmp(match->ssid_auth, "wpa") == 0) {
 
         printf("do wpa stuff\n");
+        
         set_psk_key((char*)match->ssid_name, (char*)match->ssid_pass, target);
 
     } else {
@@ -793,6 +912,8 @@ int main(int count, char **options) {
         return 1;
 
     }
+    
+    start_wpa_supplicant();
 
     while (running) {
 
