@@ -785,7 +785,6 @@ void setup_wlaninterface(struct config_interfaces *target) {
         printf("do 8021x stuff\n");
         set_bssid((char*)match->ssid_bssid, target);
         set_wpa8021x(target);
-        start_wpa_supplicant(target);
         config_wpa_supplicant(target, match);
 
     } else if(strcmp(match->ssid_auth, "wpa") == 0) {
