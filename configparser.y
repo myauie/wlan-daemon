@@ -31,7 +31,7 @@ interface_name: STRING
 		struct config_interfaces *nxt = (struct config_interfaces *)
 						malloc(sizeof(struct config_interfaces));
 		if (!cur_if) {
-			config = nxt; /* obviously the first one */
+			config = nxt; // obviously the first one
 		} else {
 			cur_if->next = nxt;
 		}
@@ -59,7 +59,7 @@ ssid_name: STRING
     
 ssid_options: ssid_options ssid_option | ssid_option
     
-ssid_option: user_name | password | identity | eap | key_mgmt | ipv6
+ssid_option: | user_name | password | identity | eap | key_mgmt | ipv6
 
 user_name: USER STRING
 	{
