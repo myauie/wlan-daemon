@@ -107,16 +107,51 @@ int network_matches(char * if_name, struct config_ssid *match) {
     strlcpy(ifr.ifr_name, if_name, sizeof(ifr.ifr_name));
     res = ioctl(s, SIOCG80211NWID, (caddr_t)&ifr);
     printf("current nwid on interface: %s\n", nwid.i_nwid);
-    close(s);
     
     if (res)
         printf("res: %d (%s)\n", res, strerror(errno));
-    return strcmp((const char*)nwid.i_nwid, match->ssid_name) == 0;
+        
+    // first of all, check if the ssid of the match found is the same as
+    // the one the interface is using
+    if(strcmp((const char*)nwid.i_nwid, match->ssid_name) == 0) {
+    
+        printf("passed nwid string cmp\n");
+    
+        // if it is, check if the bssid is the same as the one the
+        // interface is using (if they are the same access point),
+        // return true if they are the same ap
+                                
+        struct ieee80211_bssid bssid;
+        struct ether_addr ea;
+        char current_bssid[20];
+        memset(&bssid, 0, sizeof(bssid));
+        strlcpy(bssid.i_name, if_name, sizeof(bssid.i_name));
+	    res = ioctl(s, SIOCG80211BSSID, &bssid);
+        memcpy(&ea.ether_addr_octet, bssid.i_bssid, sizeof(ea.ether_addr_octet));
+        // convert bssid from binary to ascii
+        strlcpy(current_bssid, ether_ntoa(&ea), sizeof(current_bssid));
+    
+        if(strcmp(current_bssid, match->ssid_bssid) == 0) {
+        
+            printf("passed bssid string cmp\n");
+            close(s);
+            return 1;
+        
+        }
+   
+    }
+    
+    close(s);
+    
+    // do all the signal checking stuff
 
+    return 0;
 }
 
 
 int connection_active(char * if_name) {
+// returns 1 if the network status on the interface
+// is active
 
     struct ifmediareq ifmr;
     int s = -1, res;
@@ -143,11 +178,12 @@ int connection_active(char * if_name) {
 
     if (ifmr.ifm_status & IFM_ACTIVE) {
 
-        printf("network is active\n");
+        printf("connection_active: network is active\n");
         return 1;
 
     }
 
+    printf("connection_active: failed check\n");
     return 0;
 }
 
@@ -232,6 +268,7 @@ struct config_ssid *first_matching_network(struct config_interfaces *config) {
                 // get data we need from scan; bssid, auth mode
                 struct ether_addr ea;
                 memcpy(&ea.ether_addr_octet, nr[i].nr_bssid, sizeof(ea.ether_addr_octet));
+                // convert bssid from binary to ascii
                 strlcpy(cur->ssid_bssid, ether_ntoa(&ea), sizeof(cur->ssid_bssid));	
 				
 				if ((nr[i].nr_rsnakms & IEEE80211_WPA_AKM_8021X) || (nr[i].nr_rsnakms & IEEE80211_WPA_AKM_SHA256_8021X))
@@ -356,9 +393,9 @@ void set_network_id(char *network_ssid, char * if_name) {
         
 }
 
-int set_wep_key(char *wep_key, char * if_name) {
+void set_wep_key(char *wep_key, char * if_name) {
 
-    int i, s = -1, res, size;
+    int s = -1, res, len;
     struct ieee80211_nwkey nwkey;
     u_int8_t keybuffer[IEEE80211_WEP_NKID][16];
 
@@ -367,87 +404,40 @@ int set_wep_key(char *wep_key, char * if_name) {
     if (!s) {
     
         printf("socket error: %s\n", strerror(errno));
-        return 1;
+        return;
         
     }
 
     memset(&nwkey, 0, sizeof(nwkey));
     memset(&keybuffer, 0, sizeof(keybuffer));
-
     nwkey.i_wepon = IEEE80211_NWKEY_WEP;
     nwkey.i_defkid = 1;
 
-    if (isdigit((unsigned char)wep_key[0]) && wep_key[1] == ':') {
+    // for 40-bit wep, length of key must be 5 char ASCII string
+    //or 10 hex digits
 
-        /* specifying a full set of four keys */
-        nwkey.i_defkid = wep_key[0] - '0';
-        wep_key += 2;
+    // for 128-bit wep, length of key must be 13 char ASCII string
+    // or 26 hex digits
 
-        for (i = 0; i < IEEE80211_WEP_NKID; i++) {
-
-            size = sizeof(keybuffer[i]);
-            get_string(wep_key, ",", keybuffer[i], &size);
-
-            if (wep_key == NULL)
-                return 1;
-
-            nwkey.i_key[i].i_keylen = size;
-            nwkey.i_key[i].i_keydat = keybuffer[i];
-
-        }
-
-        if (*wep_key != '\0') {
-
-            printf("wep key error: %s\n", strerror(errno));
-            return 1;
-
-        }
-
+    if(sizeof(wep_key) == (5 | 12 | 13 | 28)) {
+    
+        // 0xkey or string case
+        // hex should be +2 to include 0x
+        
     } else {
+    
+	    printf("wep key is invalid length\n");
+		return;
+		
+	}
 
-        int j;
-        char *tmp = NULL;
-        size_t vlen = strlen(wep_key);
-
-        if(sizeof(vlen) == (10 || 26)) {
-
-            // key is a hex, need to remove 0x
-            j = asprintf(&tmp, "0x%s", wep_key);
-
-            if (j == -1) {
-
-                printf("memory allocation error: %s\n", strerror(errno));
-                return 1;
-
-            }
-
-            wep_key = tmp;
-
-        } else if(sizeof(vlen) == (5 || 13)) {
-
-            // key is a 0xkey or string
-
-        } else {
-
-            printf("wep key length error: %s\n", strerror(errno));
-            return 1;
-
-        }
-
-        size = sizeof(keybuffer[0]);
-        get_string(wep_key, NULL, keybuffer[0], &size);
-        free(tmp);
-
-        if (wep_key == NULL)
-            return 1;
-
-        nwkey.i_key[0].i_keylen = size;
-        nwkey.i_key[0].i_keydat = keybuffer[0];
-
-    }
-
+    len = sizeof(keybuffer[0]);
+    get_string(wep_key, NULL, keybuffer[0], &len);
+    nwkey.i_key[0].i_keylen = len;
+    nwkey.i_key[0].i_keydat = keybuffer[0];
     strlcpy(nwkey.i_name, if_name, sizeof(nwkey.i_name));
     res = ioctl(s, SIOCS80211NWKEY, (caddr_t)&nwkey);
+    close(s);
 
     if (res)
         printf("res: %d (%s)\n", res, strerror(errno));
@@ -520,6 +510,7 @@ void set_bssid(char *network_bssid, char * if_name) {
     struct ieee80211_bssid bssid;
     struct ether_addr *ea;
 
+    // convert bssid from ascii to binary
 	printf("set bssid: %s\n", network_bssid);
     ea = ether_aton(network_bssid);
 
@@ -747,8 +738,12 @@ void setup_wlaninterface(struct config_interfaces *target) {
     if (!match)
         return;
 
-    if(network_matches(if_name, match) && connection_active(if_name))
+    if (network_matches(if_name, match)) {
+    
+        printf("already using matched ssid, we do nothing\n");
         return;
+        
+    }
 
     printf("setting up network: %s\n", match->ssid_name);
     set_network_id((char*)match->ssid_name, if_name);
@@ -810,7 +805,7 @@ void setup_ethernetinterface(struct config_interfaces *cur) {
 }
 
 
-// if interface is already running, returns 0
+// if interface is running, returns 1
 int check_interface(struct config_interfaces *cur) {
 
     int if_found = 0;
@@ -848,8 +843,11 @@ int check_interface(struct config_interfaces *cur) {
     }
 
     freeifaddrs(interfaces);
-    //return if_hasaddr;
-    return if_found && (!connection_active(cur->if_name) || !if_hasaddr);
+    
+    if(if_found) return 1;
+    else if(if_hasaddr) return 1; 
+    else return 0;
+    
 }
 
 const char * mediatype(char *interface) {
