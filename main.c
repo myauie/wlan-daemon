@@ -647,34 +647,33 @@ int set_psk_key(char *nwid, char *psk_key, char * if_name, int toggle) {
 
         pkcs5_pbkdf2(psk_key, size, (uint8_t*)nwid, strlen(nwid), psk.i_psk, sizeof(psk.i_psk), 4096);
 
-        }
-        
-        psk.i_enabled = toggle;
-        strlcpy(psk.i_name, if_name, sizeof(psk.i_name));
-        ifr.ifr_data = (caddr_t)&psk;
-        res = ioctl(s, SIOCS80211WPAPSK, (caddr_t)&psk);
-        
-        if (res)
-            printf("res: %d (%s)\n", res, strerror(errno));
-
-        strlcpy(wpa.i_name, if_name, sizeof(wpa.i_name));
-        ifr.ifr_data = (caddr_t)&wpa;
-
-        res = ioctl(s, SIOCG80211WPAPARMS, (caddr_t)&wpa);
-
-        if (res)
-            printf("res: %d (%s)\n", res, strerror(errno));
-
-        wpa.i_enabled = psk.i_enabled;
-        res = ioctl(s, SIOCS80211WPAPARMS, (caddr_t)&wpa);
-        close(s);
-
-        if (res)
-            printf("res: %d (%s)\n", res, strerror(errno));        
+        }     
         
     }
-
+    
     psk.i_enabled = toggle;
+
+    strlcpy(psk.i_name, if_name, sizeof(psk.i_name));
+    ifr.ifr_data = (caddr_t)&psk;
+    res = ioctl(s, SIOCS80211WPAPSK, (caddr_t)&psk);
+        
+    if (res)
+        printf("res: %d (%s)\n", res, strerror(errno));
+
+    strlcpy(wpa.i_name, if_name, sizeof(wpa.i_name));
+    ifr.ifr_data = (caddr_t)&wpa;
+
+    res = ioctl(s, SIOCG80211WPAPARMS, (caddr_t)&wpa);
+
+    if (res)
+        printf("res: %d (%s)\n", res, strerror(errno));
+
+    wpa.i_enabled = psk.i_enabled;
+    res = ioctl(s, SIOCS80211WPAPARMS, (caddr_t)&wpa);
+    close(s);
+
+    if (res)
+        printf("res: %d (%s)\n", res, strerror(errno));  
 
 }
 
@@ -730,6 +729,7 @@ void set_wpa8021x(char * if_name, int toggle) {
         printf("res: %d (%s)\n", res, strerror(errno));
         
     } else
+        wpa.i_akms = toggle;
         wpa.i_enabled = toggle;
         
 }
@@ -1009,7 +1009,7 @@ void cleanup_interface(char* if_name, int flag) {
     // 3rd bit - wep is set
     // 4th bit - none set
     
-    int wep_res, wpa_res, wpa_ent, s = -1;
+    int wep_res, psk_res, wpa_res, s = -1;
 
     struct ifreq ifr;    
 	struct ieee80211_nwid nwid;
@@ -1022,25 +1022,44 @@ void cleanup_interface(char* if_name, int flag) {
 	memset(&nwkey, 0, sizeof(nwkey));
 	strlcpy(nwkey.i_name, if_name, sizeof(nwkey.i_name));
 	wep_res = ioctl(s, SIOCG80211NWKEY, (caddr_t)&nwkey);
+    printf("wep: %d\n", wep_res);
 
 	memset(&psk, 0, sizeof(psk));
 	strlcpy(psk.i_name, if_name, sizeof(psk.i_name));
-	wpa_res = ioctl(s, SIOCG80211WPAPSK, (caddr_t)&psk);    
+	psk_res = ioctl(s, SIOCG80211WPAPSK, (caddr_t)&psk);  
+	printf("psk_res: %d\n", psk_res);  
     
 	memset(&wpa, 0, sizeof(wpa));
 	strlcpy(wpa.i_name, if_name, sizeof(wpa.i_name));
-	wpa_ent = ioctl(s, SIOCG80211WPAPARMS, &wpa);
+	wpa_res = ioctl(s, SIOCG80211WPAPARMS, &wpa);
+    printf("psk_res: %d\n", wpa_res);  
 	
 	close(s);
+	
+	printf("%d\n", nwkey.i_wepon);
     
-    if(wep_res && (!(flag == 2)))
-        set_wep_key(0, NULL, 0);
+    if(nwkey.i_wepon && (!(flag == 2))) {
 
-    if(wpa_res && (!(flag == 4)))
-        set_psk_key(0, 0, NULL, 0);    
+        printf("removing wep stuff\n");    
+        set_wep_key(0, NULL, 0);
+        
+    }
     
-    if(wpa_ent && (!(flag == 8)))    
-        set_wpa8021x(NULL, 0);
+    printf("%d\n", psk.i_enabled);
+
+    if(psk.i_enabled && (!(flag == 4))) {
+    
+        printf("removing psk stuff\n");    
+        set_psk_key(0, 0, if_name, 0);  
+        
+    }      
+    
+    if((wpa.i_akms & IEEE80211_WPA_AKM_8021X) && (!(flag == 8))) {
+
+        printf("removing 80211x stuff\n");    
+        set_wpa8021x(if_name, 0);
+        
+    }
     
 }
 
