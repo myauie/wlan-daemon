@@ -18,7 +18,7 @@ int yylex();
     char *str;
 };
 
-%token STRING OPEN_BRACE CLOSE_BRACE USER PASS IPV6AUTO EAP KEY IDENTITY
+%token STRING OPEN_BRACE CLOSE_BRACE USER PASS IPV6AUTO EAP KEY IDENTITY PHASE2 PING
 %type <str> STRING
 
 %%
@@ -59,7 +59,7 @@ ssid_name: STRING
     
 ssid_options: ssid_options ssid_option | ssid_option
     
-ssid_option: | user_name | password | identity | eap | key_mgmt | ipv6
+ssid_option: | user_name | password | identity | eap | key_mgmt | ipv6 | phase2 | ping
 
 user_name: USER STRING
 	{
@@ -83,12 +83,22 @@ eap: EAP STRING
 
 key_mgmt: KEY STRING
         {
-                strlcpy(cur_ssid->ssid_key_mgmt, $2, 20);
+                strlcpy(cur_ssid->ssid_key_mgmt, $2, 40);
         }
 
 ipv6: IPV6AUTO
         {
                cur_ssid->ipv6_auto = true;
+        }
+        
+phase2: PHASE2 STRING
+        {
+                strlcpy(cur_ssid->ssid_phase2, $2, 40);
+        }
+        
+ping: PING STRING
+        {
+                strlcpy(cur_ssid->ssid_ping, $2, 80);
         }
 
 %%
