@@ -322,7 +322,25 @@ int network_matches(char * if_name, struct config_ssid *match) {
     close(s);
     printf("rssi is: %d\n", nr.nr_rssi);
     
-    return 0;
+    // no network to compare with; connect to new network
+    if(res == -1)
+        return 1;
+    
+    // switch over if new network is better than (old*1.5)
+    // ensure that new one is worth switching over to
+    
+    if((match->ssid_rssi) > (nr.nr_rssi * 1.5)) {
+    
+        printf("switching over to new network\n");
+        return 0;
+        
+    } else {
+    
+        printf("staying on old network\n");
+        return 1;
+        
+    }
+    
 }
 
 static int rssicmp(const void *nr1, const void *nr2) {
