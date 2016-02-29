@@ -16,6 +16,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <net/if_media.h>
@@ -136,6 +137,12 @@ int connection_active(char * if_name) {
     return 0;
 }
 
+void internet_connectivity_alarm() {
+
+    printf("timed out\n");
+
+}
+
 int internet_connectivity_check(struct config_ssid *match) {
 
 	int s, res;
@@ -144,6 +151,7 @@ int internet_connectivity_check(struct config_ssid *match) {
 	char cmp[10];
 	struct sockaddr_in saddr;
 	struct hostent *host;
+	struct itimerval timeout;
 	
 	printf("ncsi_ping: %s\n", ncsi_ping);
 	
@@ -164,15 +172,23 @@ int internet_connectivity_check(struct config_ssid *match) {
 		return 0;
 		
 	}
-
-	sprintf(header, "GET /ncsi.txt HTTP/1.0\r\nHost: %s\r\n\r\n", host->h_name);
+	
+	snprintf(header, sizeof(header), "GET /ncsi.txt HTTP/1.0\r\nHost: %s\r\n\r\n", host->h_name);	
 	printf("IP:%s\n", inet_ntoa(*(struct in_addr *)host->h_addr_list[0]));
 	memset(&saddr, 0, sizeof(saddr));
 	saddr.sin_family = host->h_addrtype;
 	memcpy(&saddr.sin_addr.s_addr, host->h_addr_list[0], sizeof(saddr.sin_addr.s_addr));
 	saddr.sin_port = htons(80);
-	printf("connecting...\n");
-	s = socket(AF_INET, SOCK_STREAM, 0);	 
+	s = socket(AF_INET, SOCK_STREAM, 0);	
+		
+	memset(&timeout, 0, sizeof(timeout));
+	timeout.it_value.tv_sec = 10;
+	signal(SIGALRM, internet_connectivity_alarm);
+	
+	if(setitimer(ITIMER_REAL, &timeout, NULL) != 0)
+	    printf("error setting timer\n");
+	    
+	printf("connecting...\n");	    
 
 	if(connect(s, (struct sockaddr*)&saddr, sizeof(struct sockaddr)) == -1) {
 	
@@ -180,6 +196,13 @@ int internet_connectivity_check(struct config_ssid *match) {
 		return 0;
 		
 	}
+	
+	timeout.it_value.tv_sec = 0;
+	
+	if(setitimer(ITIMER_REAL, &timeout, NULL) != 0)
+	    printf("error setting timer\n");
+	    
+	signal(SIGALRM, SIG_DFL);
 	
 	printf("sending...\n");
 	res = send(s, header, strlen(header), 0);
