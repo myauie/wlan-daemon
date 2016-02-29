@@ -23,12 +23,13 @@ key-mgmt:               return KEY;
 identity:               return IDENTITY;
 phase2:                 return PHASE2;
 ping:                   return PING;
+additional_auth_script: return SCRIPT;
 \".*\"			{
 				yylval.str = (char*)calloc(strlen(yytext)-1, sizeof(char));
 				strncpy(yylval.str, &yytext[1], strlen(yytext)-2);
 				return STRING;
 			}
-[A-Za-z0-9\\\[\]=+*<>[]{}()/\:;|#'"$@&~`^%,!?._-]*		yylval.str = strdup(yytext); return STRING;
+[A-Za-z0-9\\\[\]=+*<>/\:;|#'$@&~`^%,!?._-]*		yylval.str = strdup(yytext); return STRING;
 
 %%
 

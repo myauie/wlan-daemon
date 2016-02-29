@@ -18,11 +18,20 @@ int yylex();
     char *str;
 };
 
-%token STRING OPEN_BRACE CLOSE_BRACE USER PASS IPV6AUTO EAP KEY IDENTITY PHASE2 PING
+%token STRING OPEN_BRACE CLOSE_BRACE USER PASS IPV6AUTO EAP KEY IDENTITY PHASE2 PING SCRIPT
 %type <str> STRING
 
 %%
-config: config interface_set | interface_set
+config: config ncsi | interface_top
+
+ncsi: PING STRING
+    {
+    
+        strlcpy(ncsi_ping, $2, 80);           
+    
+    }
+    
+interface_top: interface_set | interface_set
     
 interface_set: interface_name OPEN_BRACE ssid_set CLOSE_BRACE
     
@@ -59,7 +68,7 @@ ssid_name: STRING
     
 ssid_options: ssid_options ssid_option | ssid_option
     
-ssid_option: | user_name | password | identity | eap | key_mgmt | ipv6 | phase2 | ping
+ssid_option: | user_name | password | identity | eap | key_mgmt | ipv6 | phase2 | script
 
 user_name: USER STRING
 	{
@@ -96,10 +105,10 @@ phase2: PHASE2 STRING
                 strlcpy(cur_ssid->ssid_phase2, $2, 40);
         }
         
-ping: PING STRING
+script: SCRIPT STRING
         {
-                strlcpy(cur_ssid->ssid_ping, $2, 80);
-        }
+                strlcpy(cur_ssid->additional_auth_script, $2, 50);    
+        }            
 
 %%
 

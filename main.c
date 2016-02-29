@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
@@ -35,6 +36,7 @@ const char config_file[] = "./wlan-daemon.conf"; // debugging
 char wpa_daemon_ctrl[] = "/var/run/wlan-daemon";
 int yyparse();
 FILE *yyin;
+
 pid_t supplicant_pid = 0;
 struct wpa_ctrl *wpa_client = 0;
 struct stat config_last_mod;
@@ -143,9 +145,9 @@ int internet_connectivity_check(struct config_ssid *match) {
 	struct sockaddr_in saddr;
 	struct hostent *host;
 	
-	printf("ssid_ping: %s\n", match->ssid_ping);
+	printf("ncsi_ping: %s\n", ncsi_ping);
 	
-	if((match->ssid_ping == NULL) || (match->ssid_ping[0] == '\0')) {
+	if((ncsi_ping == NULL) || (ncsi_ping[0] == '\0')) {
 	
 	    printf("use default host\n");
 	    host = gethostbyname("www.open-ncsi.com");	
@@ -153,7 +155,7 @@ int internet_connectivity_check(struct config_ssid *match) {
 	} else {
 	
 	    printf("use user-defined host\n");
-	    host = gethostbyname(match->ssid_ping);	
+	    host = gethostbyname(ncsi_ping);	
 	
 	}
 	if(!host) {
@@ -170,7 +172,7 @@ int internet_connectivity_check(struct config_ssid *match) {
 	memcpy(&saddr.sin_addr.s_addr, host->h_addr_list[0], sizeof(saddr.sin_addr.s_addr));
 	saddr.sin_port = htons(80);
 	printf("connecting...\n");
-	s = socket(AF_INET, SOCK_STREAM, 0);
+	s = socket(AF_INET, SOCK_STREAM, 0);	 
 
 	if(connect(s, (struct sockaddr*)&saddr, sizeof(struct sockaddr)) == -1) {
 	
@@ -324,7 +326,7 @@ int network_matches(char * if_name, struct config_ssid *match) {
     
     // no network to compare with; connect to new network
     if(res == -1)
-        return 1;
+        return 0;
     
     // switch over if new network is better than (old*1.5)
     // ensure that new one is worth switching over to

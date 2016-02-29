@@ -11,13 +11,13 @@ struct config_ssid {
     char ssid_pass[32];
     char ssid_bssid[20];
     int8_t ssid_rssi;
-    char ssid_ping[80];
     char ssid_auth[10];
     char ssid_eap[40];
     char ssid_key_mgmt[40];
     char ssid_identity[32];
     char ssid_phase2[40];
     bool ipv6_auto;
+    char additional_auth_script[50];    
     struct config_ssid *next;
 };
 
@@ -26,6 +26,8 @@ struct config_interfaces {
     struct config_ssid *ssids;
     struct config_interfaces *next;
 };
+
+    char ncsi_ping[80];
 
 extern struct config_interfaces *config;
 
