@@ -30,6 +30,8 @@ struct config_interfaces {
     char ncsi_ping[80];
 
 extern struct config_interfaces *config;
+extern struct config_interfaces *cur_if;
+extern struct config_ssid *cur_ssid;
 
 #endif // CONFIGREADER_H
 

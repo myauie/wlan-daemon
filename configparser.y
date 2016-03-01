@@ -22,7 +22,9 @@ int yylex();
 %type <str> STRING
 
 %%
-config: config ncsi | interface_top
+config: config_item | config_item config
+
+config_item: ncsi | interface_set
 
 ncsi: PING STRING
     {
@@ -30,8 +32,6 @@ ncsi: PING STRING
         strlcpy(ncsi_ping, $2, 80);           
     
     }
-    
-interface_top: interface_set | interface_set
     
 interface_set: interface_name OPEN_BRACE ssid_set CLOSE_BRACE
     
@@ -51,7 +51,7 @@ interface_name: STRING
     
 ssid_set: ssid_set ssid_spec | ssid_spec
     
-ssid_spec: ssid_name OPEN_BRACE ssid_options CLOSE_BRACE
+ssid_spec: ssid_name OPEN_BRACE ssid_options CLOSE_BRACE | ssid_name OPEN_BRACE CLOSE_BRACE
 
 ssid_name: STRING
 	{
@@ -68,7 +68,7 @@ ssid_name: STRING
     
 ssid_options: ssid_options ssid_option | ssid_option
     
-ssid_option: | user_name | password | identity | eap | key_mgmt | ipv6 | phase2 | script
+ssid_option: user_name | password | identity | eap | key_mgmt | ipv6 | phase2 | script
 
 user_name: USER STRING
 	{

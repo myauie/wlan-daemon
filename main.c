@@ -48,12 +48,16 @@ int parse_config() {
 
     if (!fp)
         return 1;
+        
+    config = 0;
+    cur_if = 0;
+    cur_ssid = 0;
 
     yyin = fp;
     yyparse();
     fclose(fp);
-
     struct config_interfaces *cur = config;
+    
     while(cur) {
 
         printf("config: %s (", cur->if_name);
@@ -1193,6 +1197,17 @@ void setup_wlaninterface(struct config_interfaces *target) {
 void setup_ethernetinterface(struct config_interfaces *cur) {
 
     // do all the stuff
+    
+    // if 8021.1x, run the supplicant stuff the same as wireless
+    // use -D wired instead of -D openbsd
+    
+    // if not using 8021.1x, just go straight to dhclient
+    
+        char command[50];
+        snprintf(command, sizeof(command), "ifconfig %s up\n", config->if_name);
+        printf("%s\n", command);
+        system(command);
+        printf("try bringing up interface\n");
 
 }
 
@@ -1273,6 +1288,27 @@ const char * mediatype(char *interface) {
     
 }
 
+void clear_ssid(struct config_ssid *ssid) {
+
+    if(!ssid)
+        return;
+        
+    clear_ssid(ssid->next);
+    free(ssid);
+
+}
+
+void clear_config(struct config_interfaces *conf) {
+
+    if(!conf)
+        return;
+        
+    clear_ssid(conf->ssids);
+    clear_config(conf->next);
+    free(conf);
+
+}
+
 int main(int count, char **options) {
 
     //int res;
@@ -1299,17 +1335,21 @@ int main(int count, char **options) {
 
         printf("checking if conf file has changed\n");
         if(config_changed()) {
+        
+            printf("modifying:\n");
+            clear_config(config);
+            printf("1\n");
+            config = 0;
+            printf("2\n");
+            cur = 0;
+            printf("3\n");            
             
-            memset(&cur, 0, sizeof(cur));
-            
-            if (parse_config()) {
-
+            if (parse_config())
                 printf("error reading configuration!\n");
-                cur = NULL;
-
-            }
-    
-        }
+            
+            } else
+                printf("4\n");
+                cur = config;
 
         while (cur) {
 
