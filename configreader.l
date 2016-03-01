@@ -23,7 +23,14 @@ key-mgmt:               return KEY;
 identity:               return IDENTITY;
 phase2:                 return PHASE2;
 ping:                   return PING;
+poll:                   return POLL;
 additional_auth_script: return SCRIPT;
+PEAP                    return PEAP;
+TTLS                    return TTLS;
+[0-9]*          {
+                    sscanf(yytext, "%d", &yylval.num);
+                    return NUMBER;
+                }
 \".*\"			{
 				yylval.str = (char*)calloc(strlen(yytext)-1, sizeof(char));
 				strncpy(yylval.str, &yytext[1], strlen(yytext)-2);

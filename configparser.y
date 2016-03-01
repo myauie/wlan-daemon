@@ -10,21 +10,32 @@ void yyerror(const char *str);
 // forward declarations
 struct config_interfaces *cur_if = 0;
 struct config_ssid *cur_ssid = 0;
+extern int poll_wait;
 int yylex();
 
 %}
 
 %union {
     char *str;
+    int num;
 };
 
 %token STRING OPEN_BRACE CLOSE_BRACE USER PASS IPV6AUTO EAP KEY IDENTITY PHASE2 PING SCRIPT
+%token POLL TTLS PEAP NUMBER
 %type <str> STRING
+%type <num> NUMBER
 
 %%
 config: config_item | config_item config
 
-config_item: ncsi | interface_set
+config_item: poll | ncsi | interface_set
+
+poll: POLL NUMBER
+    {
+    
+        poll_wait = $2;
+    
+    }
 
 ncsi: PING STRING
     {
@@ -85,9 +96,30 @@ identity: IDENTITY STRING
                 strlcpy(cur_ssid->ssid_identity, $2, 32);
         }
 
-eap: EAP STRING
+eap: EAP eaptypes
+
+eaptypes: eaptypes eaptype | eaptype
+
+eaptype: ttls | peap
+
+ttls: TTLS
         {
-                strlcpy(cur_ssid->ssid_eap, $2, 40);
+        
+            if(strlen(cur_ssid->ssid_eap) > 0)
+                strlcat(cur_ssid->ssid_eap, " TTLS", sizeof(cur_ssid->ssid_eap));
+            else
+                snprintf(cur_ssid->ssid_eap, sizeof(cur_ssid->ssid_eap), "TTLS");
+        
+        }
+        
+peap: PEAP
+        {
+        
+            if(strlen(cur_ssid->ssid_eap) > 0)
+                strlcat(cur_ssid->ssid_eap, " PEAP", sizeof(cur_ssid->ssid_eap));
+            else
+                snprintf(cur_ssid->ssid_eap, sizeof(cur_ssid->ssid_eap), "PEAP");
+        
         }
 
 key_mgmt: KEY STRING

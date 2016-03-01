@@ -41,6 +41,7 @@ FILE *yyin;
 pid_t supplicant_pid = 0;
 struct wpa_ctrl *wpa_client = 0;
 struct stat config_last_mod;
+int poll_wait;
 
 int parse_config() {
 
@@ -1338,17 +1339,13 @@ int main(int count, char **options) {
         
             printf("modifying:\n");
             clear_config(config);
-            printf("1\n");
             config = 0;
-            printf("2\n");
-            cur = 0;
-            printf("3\n");            
+            cur = 0;        
             
             if (parse_config())
                 printf("error reading configuration!\n");
             
             } else
-                printf("4\n");
                 cur = config;
 
         while (cur) {
@@ -1371,8 +1368,8 @@ int main(int count, char **options) {
             cur = cur->next;
         }
 
-        printf("Sleeping...\n");
-        sleep(10);
+        printf("Sleeping... waiting %d seconds\n", poll_wait);
+        sleep(poll_wait);
         printf("restarto\n");
 
     }
