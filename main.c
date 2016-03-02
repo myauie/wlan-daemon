@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <net/if_media.h>
 #include <net/if.h>
@@ -30,6 +31,7 @@
 #include "configreader.h"
 #include "y.tab.h"
 #include "wpa_ctrl.h"
+#include "status.h"
 
 // const char config_file[] = "/etc/wlan-daemon/wlan-daemon.config";
 const char config_file[] = "./wlan-daemon.conf"; // debugging
@@ -42,6 +44,7 @@ pid_t supplicant_pid = 0;
 struct wpa_ctrl *wpa_client = 0;
 struct stat config_last_mod;
 int poll_wait;
+int status_socket = -1;
 
 int parse_config() {
 
@@ -102,6 +105,49 @@ int open_socket(int domain) {
     return socket(domain, SOCK_DGRAM, 0);
 
 }
+
+int open_status_socket() {
+
+    const char servername[] = "/tmp/wlan-status";
+    struct sockaddr_un server;
+    
+    unlink(servername);
+    memset(&status_socket, 0, sizeof(status_socket));
+    status_socket = open_socket(AF_UNIX);
+    
+    if(status_socket < 0) {
+    
+        printf("status socket could not be created\n");
+        return -1;
+    
+    }
+    
+    server.sun_len = snprintf(server.sun_path, sizeof(server.sun_path), servername);
+    server.sun_family = AF_UNIX;
+    
+    if(bind(status_socket, (struct sockaddr*)&server, sizeof(server)) == -1) {
+    
+        printf("error binding status socket: %s\n", strerror(errno));
+        return -1;
+    
+    }
+    
+    return 0;    
+
+}
+
+void update_status(enum wd_events stat, char *msg) {
+
+    struct wd_event ev;
+    ev.event = stat;
+    
+    if(msg)
+        snprintf(ev.message, sizeof(ev.message), "%s", msg);
+        
+    send(status_socket, &ev, sizeof(ev), 0);
+
+}
+
 
 int connection_active(char * if_name, int if_type) {
 // returns 1 if the network status on the interface
@@ -272,6 +318,7 @@ int internet_connectivity_check(struct config_ssid *match) {
 		// network requires additional auth; execute
 	    // user-defined action
 	    printf("302 redirect\n");	    
+	    update_status(AUTH_REQUIRED, host->h_name);
 	    return 2;
 
 	} else
@@ -1410,6 +1457,9 @@ int main(int count, char **options) {
         return 1;
 
     }
+    
+    if(open_status_socket())
+        printf("error opening status socket; no status will be provided\n");
     
     stat(config_file, &config_last_mod);
     printf("last config modified time: %s\n", ctime(&config_last_mod.st_mtime));
