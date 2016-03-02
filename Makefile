@@ -4,11 +4,16 @@ YACC = yacc -d
 OBJS = lex.yy.o y.tab.o wpa_ctrl.o os_unix.o main.o
 LDFLAGS = -lfl -lutil
 CFLAGS = -std=c99 -DCONFIG_CTRL_IFACE -DCONFIG_CTRL_IFACE_UNIX
+SC = wlan-client
+SCOBJS = client.o
 
-all: $(TARGET)
+all: $(TARGET) $(SC)
 
 $(TARGET): $(OBJS)
 	gcc -o $(TARGET) $(OBJS) $(LDFLAGS)
+	
+$(SC): $(SCOBJS)
+	gcc -o $(SC) $(SCOBJS)	
 
 lex.yy.o: lex.yy.c
 
@@ -21,4 +26,4 @@ lex.yy.c: configreader.l y.tab.h
 	$(LEX) configreader.l
 
 clean:
-	rm -f $(TARGET) $(OBJS) y.tab.* lex.yy.c
+	rm -f $(TARGET) $(OBJS) $(SC) $(SCOBJS) y.tab.* lex.yy.c

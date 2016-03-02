@@ -108,26 +108,11 @@ int open_socket(int domain) {
 
 int open_status_socket() {
 
-    const char servername[] = "/tmp/wlan-status";
-    struct sockaddr_un server;
-    
-    unlink(servername);
-    memset(&status_socket, 0, sizeof(status_socket));
     status_socket = open_socket(AF_UNIX);
     
     if(status_socket < 0) {
     
         printf("status socket could not be created\n");
-        return -1;
-    
-    }
-    
-    server.sun_len = snprintf(server.sun_path, sizeof(server.sun_path), servername);
-    server.sun_family = AF_UNIX;
-    
-    if(bind(status_socket, (struct sockaddr*)&server, sizeof(server)) == -1) {
-    
-        printf("error binding status socket: %s\n", strerror(errno));
         return -1;
     
     }
@@ -138,13 +123,19 @@ int open_status_socket() {
 
 void update_status(enum wd_events stat, char *msg) {
 
+    const char servername[] = "/tmp/wlan-status";
     struct wd_event ev;
+    struct sockaddr_un server;
+    
+    server.sun_len = snprintf(server.sun_path, sizeof(server.sun_path), servername);
+    server.sun_family = AF_UNIX;
+    
     ev.event = stat;
     
     if(msg)
         snprintf(ev.message, sizeof(ev.message), "%s", msg);
-        
-    send(status_socket, &ev, sizeof(ev), 0);
+    
+    sendto(status_socket, &ev, sizeof(ev), 0, (struct sockaddr*)&server, sizeof(server));
 
 }
 
@@ -231,7 +222,7 @@ int internet_connectivity_check(struct config_ssid *match) {
 
 	int s, res;
 	char header[200];
-	char input[200];
+	char input[100];
 	char cmp[10];
 	struct sockaddr_in saddr;
 	struct hostent *host;
@@ -300,6 +291,7 @@ int internet_connectivity_check(struct config_ssid *match) {
 		
 	}
 	
+	memset(&input, 0, sizeof(input));
 	printf("receiving...\n");
 	res = recv(s, input, sizeof(input), 0);
     
@@ -332,7 +324,7 @@ int internet_connectivity_check(struct config_ssid *match) {
 int hotspot() {
 
 	// use xdg-open default web browser if is nothing specified
-    system("xdg-open http://www.google.com/");
+    update_status(AUTH_REQUIRED, "www.google.com");
     
     return 1;
 
@@ -1211,6 +1203,7 @@ int setup_wlaninterface(struct config_interfaces *target) {
     printf("setting up network: %s\n", match->ssid_name);
     set_network_id((char*)match->ssid_name, if_name);
     printf("%s\n", match->ssid_auth);
+    update_status(CONNECTING, match->ssid_name);
         
     if (strcmp(match->ssid_auth, "802.1x") == 0) {
 
@@ -1253,10 +1246,12 @@ int setup_wlaninterface(struct config_interfaces *target) {
     
             res = internet_connectivity_check(match);
     
-            if(res == 1)
+            if(res == 1) {
+            
+                update_status(CONNECTED, match->ssid_name);
                 return 1;
                     
-            else if(res == 2) {
+            } else if(res == 2) {
                 // this is a hotspot; run user-defined command
                 // or open default web browser
                 hotspot();
@@ -1325,8 +1320,8 @@ int setup_ethernetinterface(struct config_interfaces *cur) {
         // if we are successfully connected to the network
         // and we don't need additional auth, then we are good
     
-        if(internet_connectivity_check(match) == 1)
-            return 1;
+        //if(internet_connectivity_check(match) == 1)
+        //    return 1;
             
             // all is ok, sleep            
         
