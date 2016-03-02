@@ -103,12 +103,17 @@ int open_socket(int domain) {
 
 }
 
-int connection_active(char * if_name) {
+int connection_active(char * if_name, int if_type) {
 // returns 1 if the network status on the interface
 // is active
 
+    // if_type: 0 for ethernet, 1 for ieee80211
+
     struct ifmediareq ifmr;
-    int s = -1, res;
+    const struct ifmedia_status_description *ifms;
+    static const int ifm_status_valid_list[] = IFM_STATUS_VALID_LIST;
+    static const struct ifmedia_status_description ifm_status_descriptions[] = IFM_STATUS_DESCRIPTIONS;
+    int bit = 0, s = -1, res;
 
     s = open_socket(AF_INET);
 
@@ -129,17 +134,45 @@ int connection_active(char * if_name) {
         return 0;
         
     }
+    
+    if(if_type) {
+    
+        // ieee80211 check
 
-    //ifmr.ifm_status
-    if (IFM_ACTIVE) {
+        if (IFM_ACTIVE) {
 
-        printf("connection_active: network is active\n");
-        return 1;
+            printf("connection_active: ieee80211 network is active\n");
+            return 1;
 
+        }
+
+        printf("connection_active: ieee80211 failed check\n");
+        return 0;
+    
+    } else {
+    
+        // ethernet check
+    
+            for (ifms = ifm_status_descriptions; ifms->ifms_valid != 0; ifms++) {
+            
+                if (ifms->ifms_type == IFM_TYPE(ifmr.ifm_current))
+                    
+                    if(strcmp(IFM_STATUS_DESC(ifms, ifmr.ifm_status), "active") == 0) {
+    
+                        printf("connection_active: ethernet network is active\n");
+                        return 1;
+            
+                     } else {
+                     
+                        printf("connection_active: ethernet failed check\n");
+                        return 0;
+                     
+                     }
+            
+            }
+    
     }
-
-    printf("connection_active: failed check\n");
-    return 0;
+    
 }
 
 void internet_connectivity_alarm() {
@@ -171,6 +204,7 @@ int internet_connectivity_check(struct config_ssid *match) {
 	    host = gethostbyname(ncsi_ping);	
 	
 	}
+	
 	if(!host) {
 	
 		printf("name resolution failed\n");
@@ -311,7 +345,7 @@ int network_matches(char * if_name, struct config_ssid *match) {
             // ok, the one we want is already on the interface.
             // now check if it's connected to the wlan, if it's not
             // then we need to try dhclient again            
-            if(connection_active(if_name)) {            
+            if(connection_active(if_name, 1)) {            
             
                 // if we are successfully connected to the network
                 // and we don't need additional auth, then we are good
@@ -1111,19 +1145,19 @@ void cleanup_interface(char* if_name, int flag) {
     
 }
 
-void setup_wlaninterface(struct config_interfaces *target) {
+int setup_wlaninterface(struct config_interfaces *target) {
 
-    int retries = 3, res;
+    int retries = 1, res;
     struct config_ssid *match = first_matching_network(target);
     char * if_name = target->if_name;
 
     if (!match)
-        return;
+        return 0;
 
     if (network_matches(if_name, match)) {
     
         printf("already using matched ssid, we do nothing\n");
-        return;
+        return 1;
         
     }
 
@@ -1165,7 +1199,7 @@ void setup_wlaninterface(struct config_interfaces *target) {
 
     while(retries != 0) {
     
-        if(connection_active(if_name)) {
+        if(connection_active(if_name, 1)) {
     
             // if we are successfully connected to the network
             // and we don't need additional auth, then we are good
@@ -1173,18 +1207,18 @@ void setup_wlaninterface(struct config_interfaces *target) {
             res = internet_connectivity_check(match);
     
             if(res == 1)
-                return;
+                return 1;
                     
             else if(res == 2) {
                 // this is a hotspot; run user-defined command
                 // or open default web browser
                 hotspot();
-                return;
+                return 1;
             
             } else {
 
                 printf("not active, waiting...\n");
-                sleep(10);
+                sleep(5);
                 retries--;
                 
             }
@@ -1192,23 +1226,75 @@ void setup_wlaninterface(struct config_interfaces *target) {
         }
 
     }
+    
+    return 0;
 
 }
 
-void setup_ethernetinterface(struct config_interfaces *cur) {
+int setup_ethernetinterface(struct config_interfaces *cur) {
 
-    // do all the stuff
+    int retries = 1;
+    struct config_ssid *match = cur->ssids;
     
     // if 8021.1x, run the supplicant stuff the same as wireless
     // use -D wired instead of -D openbsd
     
     // if not using 8021.1x, just go straight to dhclient
     
+    printf("%s\n", cur->if_name);
+    
+    if(!connection_active(cur->if_name, 0)) {
+    
         char command[50];
         snprintf(command, sizeof(command), "ifconfig %s up\n", config->if_name);
         printf("%s\n", command);
         system(command);
         printf("try bringing up interface\n");
+        
+        // check if a password has been set; if yes, we want to use the supplicant
+        
+        if((sizeof(&match->ssid_pass) == 0) || (match->ssid_pass[0] == '\0'))
+		    strlcpy(match->ssid_auth, "none", sizeof(match->ssid_auth));
+		else    
+		    strlcpy(match->ssid_auth, "802.1x", sizeof(match->ssid_auth));		    
+		    	
+        // remove wireless settings from wireless interface before trying ethernet
+        // dunno if necessary yet
+        cleanup_interface(cur->if_name, 1);        
+
+        if(strcmp(cur->ssids->ssid_auth, "802.1x") == 0) {
+        
+            // do supplicant stuff
+            
+            //config_wpa_supplicant(if_name, match);
+        
+        }
+
+	    if (match->ipv6_auto)
+            set_ipv6_auto(cur->if_name);        
+
+        start_dhclient(cur->if_name);                
+    
+        // if we are successfully connected to the network
+        // and we don't need additional auth, then we are good
+    
+        if(internet_connectivity_check(match) == 1)
+            return 1;
+            
+            // all is ok, sleep            
+        
+    } else {
+    
+        // if we are successfully connected to the network,
+        // then we are good. otherwise try another connection
+        if(internet_connectivity_check(match) == 1)
+            return 1;
+    
+        // all is ok, sleep
+    
+    }
+    
+    return 0;
 
 }
 
@@ -1356,13 +1442,20 @@ int main(int count, char **options) {
 
                 if(strcmp(mediatype(cur->if_name), "Ethernet") == 0) {
 
-                    setup_ethernetinterface(cur);
+                    if(setup_ethernetinterface(cur))
+                        break;
 
                 } else if(strcmp(mediatype(cur->if_name), "IEEE802.11") == 0) {
+                
+                    for(struct config_ssid *scur = cur->ssids; scur; scur->next) {
 
-                    setup_wlaninterface(cur);
+                        if(setup_wlaninterface(cur))
+                            break;
+                            
+                    }
 
                 }
+                
             }
 
             cur = cur->next;
