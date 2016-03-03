@@ -84,6 +84,27 @@ int parse_config() {
 
 }
 
+void clear_ssid(struct config_ssid *ssid) {
+
+    if(!ssid)
+        return;
+        
+    clear_ssid(ssid->next);
+    free(ssid);
+    
+}
+    
+void clear_config(struct config_interfaces *conf) {
+
+    if(!conf)
+        return;
+        
+    clear_ssid(conf->ssids);
+    clear_config(conf->next);
+    free(conf);
+
+}
+
 struct config_interfaces *find_config(char *interface) {
 
     struct config_interfaces *cur = config;
@@ -456,13 +477,14 @@ static int rssicmp(const void *nr1, const void *nr2) {
 }
 
 // based on ieee80211_listnodes() from ifconfig
-struct config_ssid *first_matching_network(struct config_interfaces *config) {
+struct config_ssid *all_matching_network(struct config_interfaces *config) {
     struct ieee80211_nodereq_all na;
     struct ieee80211_nodereq nr[512];
     struct ifreq ifr;
     char name[IEEE80211_NWID_LEN];
     int i, s, len, res;
     int8_t rssi;
+    struct config_ssid *ret = 0;
 
     // open socket and scan for wlans
     memset(&ifr, 0, sizeof(ifr));
@@ -515,7 +537,6 @@ struct config_ssid *first_matching_network(struct config_interfaces *config) {
 
     while (cur) {
 
-        // if a wlan we want is found, return
         for(i = 0; i < na.na_nodes; i++) {
         
             len = nr[i].nr_nwid_len > IEEE80211_NWID_LEN? IEEE80211_NWID_LEN: nr[i].nr_nwid_len;
@@ -571,7 +592,19 @@ struct config_ssid *first_matching_network(struct config_interfaces *config) {
 				    // no auth on access point
 
                 printf("%s mode found\n", cur->ssid_auth);
-                return cur;
+
+                struct config_ssid *cpy = malloc(sizeof(struct config_ssid));
+                memcpy(cpy, cur, sizeof(struct config_ssid));
+                
+                if(ret)
+                    ret->next = cpy;
+                    
+                else {
+                
+                    ret = cpy;
+                    ret->next = 0;
+                    
+                }
                 
             }
 
@@ -580,7 +613,7 @@ struct config_ssid *first_matching_network(struct config_interfaces *config) {
 		cur = cur->next;
     }
 
-    return NULL;
+    return ret;
 
 }
 
@@ -1188,9 +1221,11 @@ void cleanup_interface(char* if_name, int flag) {
 
 int setup_wlaninterface(struct config_interfaces *target) {
 
-    int retries = 1, res;
-    struct config_ssid *match = first_matching_network(target);
+    int retries = 1, res = 0;
+    struct config_ssid *match, *all = all_matching_network(target);
     char * if_name = target->if_name;
+    
+    match = all;
 
     if (!match)
         return 0;
@@ -1198,80 +1233,89 @@ int setup_wlaninterface(struct config_interfaces *target) {
     if (network_matches(if_name, match)) {
     
         printf("already using matched ssid, we do nothing\n");
+        clear_ssid(all);
         return 1;
         
     }
 
-    printf("setting up network: %s\n", match->ssid_name);
-    set_network_id((char*)match->ssid_name, if_name);
-    printf("%s\n", match->ssid_auth);
-    update_status(CONNECTING, match->ssid_name);
+    while(match) {
+
+        printf("setting up network: %s\n", match->ssid_name);
+        set_network_id((char*)match->ssid_name, if_name);
+        printf("%s\n", match->ssid_auth);
+        update_status(CONNECTING, match->ssid_name);
         
-    if (strcmp(match->ssid_auth, "802.1x") == 0) {
+        if (strcmp(match->ssid_auth, "802.1x") == 0) {
 
-        printf("do 8021x stuff\n");
-        cleanup_interface(if_name, 8);
-        set_bssid((char*)match->ssid_bssid, if_name);
-        set_wpa8021x(if_name, 1);
-        config_wpa_supplicant(if_name, match);
+            printf("do 8021x stuff\n");
+            cleanup_interface(if_name, 8);
+            set_bssid((char*)match->ssid_bssid, if_name);
+            set_wpa8021x(if_name, 1);
+            config_wpa_supplicant(if_name, match);
 
-    } else if(strcmp(match->ssid_auth, "wpa") == 0) {
+        } else if(strcmp(match->ssid_auth, "wpa") == 0) {
 
-        printf("do wpa stuff\n");
-        cleanup_interface(if_name, 4);
-        set_psk_key((char*)match->ssid_name, (char*)match->ssid_pass, if_name, 1);
+            printf("do wpa stuff\n");
+            cleanup_interface(if_name, 4);
+            set_psk_key((char*)match->ssid_name, (char*)match->ssid_pass, if_name, 1);
 
-    } else if(strcmp(match->ssid_auth, "wep") == 0) {
+        } else if(strcmp(match->ssid_auth, "wep") == 0) {
 
-        printf("do wep stuff\n");
-        cleanup_interface(if_name, 2);
-        set_wep_key((char*)match->ssid_pass, if_name, 1);
+            printf("do wep stuff\n");
+            cleanup_interface(if_name, 2);
+            set_wep_key((char*)match->ssid_pass, if_name, 1);
 
-    } else if(strcmp(match->ssid_auth, "none") == 0) {
+        } else if(strcmp(match->ssid_auth, "none") == 0) {
 
-        printf("no security has been set\n");
-        cleanup_interface(if_name, 1);
+            printf("no security has been set\n");
+            cleanup_interface(if_name, 1);
     
-    }
+        }
 	
-	if (match->ipv6_auto)
-        set_ipv6_auto(if_name);        
+	    if (match->ipv6_auto)
+            set_ipv6_auto(if_name);        
 
-    start_dhclient(if_name);
+        start_dhclient(if_name);
 
-    while(retries != 0) {
+        while(retries != 0) {
     
-        if(connection_active(if_name, 1)) {
+            if(connection_active(if_name, 1)) {
     
-            // if we are successfully connected to the network
-            // and we don't need additional auth, then we are good
+                // if we are successfully connected to the network
+                // and we don't need additional auth, then we are good
     
-            res = internet_connectivity_check(match);
+                res = internet_connectivity_check(match);
     
-            if(res == 1) {
+                if(res == 1) {
             
-                update_status(CONNECTED, match->ssid_name);
-                return 1;
+                    update_status(CONNECTED, match->ssid_name);
+                    return 1;
                     
-            } else if(res == 2) {
-                // this is a hotspot; run user-defined command
-                // or open default web browser
-                hotspot();
-                return 1;
+                } else if(res == 2) {
+                    // this is a hotspot; run user-defined command
+                    // or open default web browser
+                    hotspot();
+                    return 1;
             
-            } else {
+                } else {
 
-                printf("not active, waiting...\n");
-                sleep(5);
-                retries--;
+                    printf("not active, waiting...\n");
+                    sleep(5);
+                    retries--;
+                    
+                }
+                
+                }
+                
                 
             }
-                
-        }
+            
+            match = match->next;
 
     }
     
-    return 0;
+    clear_ssid(all);
+    return res;
 
 }
 
@@ -1419,29 +1463,7 @@ const char * mediatype(char *interface) {
     
 }
 
-void clear_ssid(struct config_ssid *ssid) {
-
-    if(!ssid)
-        return;
-        
-    clear_ssid(ssid->next);
-    free(ssid);
-
-}
-
-void clear_config(struct config_interfaces *conf) {
-
-    if(!conf)
-        return;
-        
-    clear_ssid(conf->ssids);
-    clear_config(conf->next);
-    free(conf);
-
-}
-
 int main(int count, char **options) {
-
 
     //int res;
     //res = daemon(0, 0);
@@ -1483,8 +1505,10 @@ int main(int count, char **options) {
             if (parse_config())
                 printf("error reading configuration!\n");
             
-            } else
+            else
                 cur = config;
+                
+        }
 
         while (cur) {
 
@@ -1498,13 +1522,9 @@ int main(int count, char **options) {
                         break;
 
                 } else if(strcmp(mediatype(cur->if_name), "IEEE802.11") == 0) {
-                
-                    for(struct config_ssid *scur = cur->ssids; scur; scur->next) {
 
                         if(setup_wlaninterface(cur))
                             break;
-                            
-                    }
 
                 }
                 
