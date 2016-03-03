@@ -13,6 +13,7 @@
 #include <inttypes.h>
 #include <time.h>
 #include <netdb.h>
+#include <resolv.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -230,6 +231,15 @@ int internet_connectivity_check(struct config_ssid *match) {
 	
 	printf("ncsi_ping: %s\n", ncsi_ping);
 	
+	s = socket(AF_INET, SOCK_STREAM, 0);
+	
+    memset(&timeout, 0, sizeof(timeout));	
+	signal(SIGALRM, internet_connectivity_alarm);	
+	timeout.it_value.tv_sec = 3;
+	
+	if(setitimer(ITIMER_REAL, &timeout, NULL) != 0)
+	    printf("error setting timer\n");
+	
 	if((ncsi_ping == NULL) || (ncsi_ping[0] == '\0')) {
 	
 	    printf("use default host\n");
@@ -255,16 +265,8 @@ int internet_connectivity_check(struct config_ssid *match) {
 	saddr.sin_family = host->h_addrtype;
 	memcpy(&saddr.sin_addr.s_addr, host->h_addr_list[0], sizeof(saddr.sin_addr.s_addr));
 	saddr.sin_port = htons(80);
-	s = socket(AF_INET, SOCK_STREAM, 0);	
-		
-	memset(&timeout, 0, sizeof(timeout));
-	timeout.it_value.tv_sec = 10;
-	signal(SIGALRM, internet_connectivity_alarm);
-	
-	if(setitimer(ITIMER_REAL, &timeout, NULL) != 0)
-	    printf("error setting timer\n");
-	    
-	printf("connecting...\n");	    
+
+	printf("connecting...\n");		
 
 	if(connect(s, (struct sockaddr*)&saddr, sizeof(struct sockaddr)) == -1) {
 	
@@ -1320,8 +1322,8 @@ int setup_ethernetinterface(struct config_interfaces *cur) {
         // if we are successfully connected to the network
         // and we don't need additional auth, then we are good
     
-        //if(internet_connectivity_check(match) == 1)
-        //    return 1;
+        if(internet_connectivity_check(match) == 1)
+            return 1;
             
             // all is ok, sleep            
         
@@ -1440,9 +1442,14 @@ void clear_config(struct config_interfaces *conf) {
 
 int main(int count, char **options) {
 
+
     //int res;
     //res = daemon(0, 0);
     //printf("return value: %s\n", res);
+    
+    res_init();
+    _res.retrans = 2;
+    _res.retry = 2;   
 
     int running = 1;
 

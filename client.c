@@ -60,7 +60,7 @@ int main(int argc, char **argv) {
             case AUTH_REQUIRED:
             
                 printf("auth required: %s\n", ev.message);
-                snprintf(cmd, sizeof(cmd), "xdg-browser http://%s/", ev.message);
+                snprintf(cmd, sizeof(cmd), "xdg-open http://%s/", ev.message);
                 system(cmd);
                 break;
                 
