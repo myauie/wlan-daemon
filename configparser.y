@@ -3,15 +3,19 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "configreader.h"
+#include "config.h"
 
 void yyerror(const char *str);
 
 // forward declarations
-struct config_interfaces *cur_if = 0;
-struct config_ssid *cur_ssid = 0;
 extern int poll_wait;
 int yylex();
+int yylineno;
+
+// parser structures
+struct config_interfaces *cur_if = 0;
+struct config_ssid *cur_ssid = 0;
+
 
 %}
 
@@ -20,8 +24,9 @@ int yylex();
     int num;
 };
 
-%token STRING OPEN_BRACE CLOSE_BRACE USER PASS IPV6AUTO EAP KEY IDENTITY PHASE2 PING SCRIPT
-%token POLL TTLS PEAP NUMBER
+%token STRING OPEN_BRACE CLOSE_BRACE USER PASS IPV6AUTO EAP KEY IDENTITY PHASE1 PHASE2 GROUP
+%token PAIRWISE CA_CERT CLIENT_CERT PRIVATE_KEY PRIVATE_KEY_PW PING SCRIPT POLL 
+%token TLS TTLS PEAP MD5 NUMBER CCMP TKIP
 %type <str> STRING
 %type <num> NUMBER
 
@@ -50,6 +55,7 @@ interface_name: STRING
 	{
 		struct config_interfaces *nxt = (struct config_interfaces *)
 						malloc(sizeof(struct config_interfaces));
+		memset(nxt, 0, sizeof(*nxt));
 		if (!cur_if) {
 			config = nxt; // obviously the first one
 		} else {
@@ -58,16 +64,24 @@ interface_name: STRING
 		cur_if = nxt;
 		cur_ssid = 0;
 		strlcpy(cur_if->if_name, $1, 32);
-	}
-    
-ssid_set: ssid_set ssid_spec | ssid_spec
-    
+	}	
+
+ssid_set: ssid_set ssid_item | ssid_item
+
+ssid_item: ipv6 | ssid_spec
+
+ipv6: IPV6AUTO
+        {
+               cur_if->ipv6_auto = 1;
+        }
+
 ssid_spec: ssid_name OPEN_BRACE ssid_options CLOSE_BRACE | ssid_name OPEN_BRACE CLOSE_BRACE
 
 ssid_name: STRING
 	{
 		struct config_ssid *nxt = (struct config_ssid *)
 					  malloc(sizeof(struct config_ssid));
+		memset(nxt, 0, sizeof(*nxt));
 		if (!cur_ssid) {
 			cur_if->ssids = nxt;
 		} else {
@@ -79,7 +93,9 @@ ssid_name: STRING
     
 ssid_options: ssid_options ssid_option | ssid_option
     
-ssid_option: user_name | password | identity | eap | key_mgmt | ipv6 | phase2 | script
+ssid_option: user_name | password | identity | eap | key_mgmt
+    | phase1 | phase2 | script | group | pairwise | ca_cert | client_cert
+    | private_key | private_key_passwd
 
 user_name: USER STRING
 	{
@@ -100,7 +116,15 @@ eap: EAP eaptypes
 
 eaptypes: eaptypes eaptype | eaptype
 
-eaptype: ttls | peap
+eaptype: tls | ttls | peap | md5
+
+tls: TLS
+        {
+            if(strlen(cur_ssid->ssid_eap) > 0)
+                strlcat(cur_ssid->ssid_eap, " TLS", sizeof(cur_ssid->ssid_eap));
+            else
+                snprintf(cur_ssid->ssid_eap, sizeof(cur_ssid->ssid_eap), "TLS");        
+        }
 
 ttls: TTLS
         {
@@ -113,24 +137,32 @@ ttls: TTLS
         }
         
 peap: PEAP
-        {
         
+        {
             if(strlen(cur_ssid->ssid_eap) > 0)
                 strlcat(cur_ssid->ssid_eap, " PEAP", sizeof(cur_ssid->ssid_eap));
             else
                 snprintf(cur_ssid->ssid_eap, sizeof(cur_ssid->ssid_eap), "PEAP");
         
         }
+        
+md5: MD5
+        {
+            if(strlen(cur_ssid->ssid_eap) > 0)
+                strlcat(cur_ssid->ssid_eap, " MD5", sizeof(cur_ssid->ssid_eap));
+            else
+                snprintf(cur_ssid->ssid_eap, sizeof(cur_ssid->ssid_eap), "MD5");
+        }
 
 key_mgmt: KEY STRING
         {
                 strlcpy(cur_ssid->ssid_key_mgmt, $2, 40);
         }
-
-ipv6: IPV6AUTO
+        
+phase1: PHASE1 STRING
         {
-               cur_ssid->ipv6_auto = true;
-        }
+                strlcpy(cur_ssid->ssid_phase1, $2, 40);
+        }        
         
 phase2: PHASE2 STRING
         {
@@ -142,10 +174,74 @@ script: SCRIPT STRING
                 strlcpy(cur_ssid->additional_auth_script, $2, 50);    
         }            
 
+group: GROUP grouptypes
+
+grouptypes: grouptypes grouptype | grouptype
+
+grouptype: ccmp | tkip
+
+ccmp: CCMP
+        {
+            if(strlen(cur_ssid->ssid_group) > 0)
+                strlcat(cur_ssid->ssid_group, " CCMP", sizeof(cur_ssid->ssid_group));
+            else
+                snprintf(cur_ssid->ssid_group, sizeof(cur_ssid->ssid_group), "CCMP");          
+        }
+        
+tkip: TKIP
+        {
+            if(strlen(cur_ssid->ssid_group) > 0)
+                strlcat(cur_ssid->ssid_group, " TKIP", sizeof(cur_ssid->ssid_group));
+            else
+                snprintf(cur_ssid->ssid_group, sizeof(cur_ssid->ssid_group), "TKIP");         
+        }
+
+pairwise: PAIRWISE pairwisetypes
+
+pairwisetypes: pairwisetypes pairwisetype | pairwisetype
+
+pairwisetype: ccmp | tkip
+
+ccmp: CCMP
+        {
+            if(strlen(cur_ssid->ssid_pairwise) > 0)
+                strlcat(cur_ssid->ssid_pairwise, " CCMP", sizeof(cur_ssid->ssid_pairwise));
+            else
+                snprintf(cur_ssid->ssid_pairwise, sizeof(cur_ssid->ssid_pairwise), "CCMP");        
+        }
+
+tkip: TKIP
+        {
+            if(strlen(cur_ssid->ssid_pairwise) > 0)
+                strlcat(cur_ssid->ssid_pairwise, " TKIP", sizeof(cur_ssid->ssid_pairwise));
+            else
+                snprintf(cur_ssid->ssid_pairwise, sizeof(cur_ssid->ssid_pairwise), "TKIP");         
+        }
+
+ca_cert: CA_CERT STRING
+        {
+                strlcpy(cur_ssid->ssid_ca_cert, $2, 50);        
+        }
+
+client_cert: CLIENT_CERT STRING
+        {
+                strlcpy(cur_ssid->ssid_client_cert, $2, 50);        
+        }
+
+private_key: PRIVATE_KEY STRING
+        {
+                strlcpy(cur_ssid->ssid_private_key, $2, 50);        
+        }
+
+private_key_passwd: PRIVATE_KEY_PW STRING
+        {
+                strlcpy(cur_ssid->ssid_private_key_pwd, $2, 50);        
+        }
+
 %%
 
 void yyerror(const char *str) {
-	printf("error: %s", str);
+	printf("line %d error: %s", yylineno, str);
 	exit(1);
 }
 

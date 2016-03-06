@@ -1,5 +1,6 @@
 %option noyywrap
 %option nounput
+%option yylineno
 
 %{
 
@@ -19,14 +20,25 @@ autoipv6	            return IPV6AUTO;
 user:		            return USER;
 pass:		            return PASS;
 eap:                    return EAP;
-key-mgmt:               return KEY;
+key_mgmt:               return KEY;
 identity:               return IDENTITY;
+phase1:                 return PHASE1;
 phase2:                 return PHASE2;
+group:                  return GROUP;
+pairwise:               return PAIRWISE;
+ca_cert:                return CA_CERT;
+client_cert:            return CLIENT_CERT;
+private_key:            return PRIVATE_KEY;
+private_key_passwd:     return PRIVATE_KEY_PW;
 ping:                   return PING;
 poll:                   return POLL;
 additional_auth_script: return SCRIPT;
 PEAP                    return PEAP;
+TLS                     return TLS;
 TTLS                    return TTLS;
+MD5                     return MD5;
+CCMP                    return CCMP;
+TKIP                    return TKIP;
 [0-9]*          {
                     sscanf(yytext, "%d", &yylval.num);
                     return NUMBER;
@@ -36,7 +48,7 @@ TTLS                    return TTLS;
 				strncpy(yylval.str, &yytext[1], strlen(yytext)-2);
 				return STRING;
 			}
-[A-Za-z0-9\\\[\]=+*<>/\:;|#'$@&~`^%,!?._-]*		yylval.str = strdup(yytext); return STRING;
+[^ \t\r\n{}]*		yylval.str = strdup(yytext); return STRING;
 
 %%
 

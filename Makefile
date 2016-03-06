@@ -1,9 +1,10 @@
 TARGET = wlan-daemon
 LEX = lex
 YACC = yacc -d
-OBJS = lex.yy.o y.tab.o wpa_ctrl.o os_unix.o main.o
-LDFLAGS = -lfl -lutil
-CFLAGS = -std=c99 -DCONFIG_CTRL_IFACE -DCONFIG_CTRL_IFACE_UNIX
+OBJS = lex.yy.o y.tab.o wpa_ctrl.o os_unix.o main.o config.o network.o
+OBJS += status.o supplicant.o
+LDFLAGS = -lfl -lutil -g
+CFLAGS = -std=c99 -DCONFIG_CTRL_IFACE -DCONFIG_CTRL_IFACE_UNIX -g
 SC = wlan-client
 SCOBJS = client.o
 
@@ -17,7 +18,7 @@ $(SC): $(SCOBJS)
 
 lex.yy.o: lex.yy.c
 
-y.tab.o: configreader.h
+y.tab.o: config.h
 
 y.tab.c y.tab.h: configparser.y
 	$(YACC) configparser.y
