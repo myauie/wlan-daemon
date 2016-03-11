@@ -271,11 +271,15 @@ int set_psk_key(char *nwid, char *psk_key, char * if_name, int toggle) {
 
 }
 
-void set_bssid(char *network_bssid, char * if_name) {
+void set_bssid(char *network_bssid, char * if_name, int toggle) {
 
     int s = -1, res;
     struct ieee80211_bssid bssid;
     struct ether_addr *ea;
+    
+    s = open_socket(AF_INET);
+    
+    if(toggle) {
 
     // convert bssid from ascii to binary
 	printf("set bssid: %s\n", network_bssid);
@@ -286,7 +290,9 @@ void set_bssid(char *network_bssid, char * if_name) {
 
     memcpy(&bssid.i_bssid, ea->ether_addr_octet, sizeof(bssid.i_bssid));
     strlcpy(bssid.i_name, if_name, sizeof(bssid.i_name));
-    s = open_socket(AF_INET);
+    
+    } else
+        memset(&bssid.i_bssid, 0, sizeof(bssid.i_bssid));
 
     if (!s)
         printf("error opening socket: %s\n", strerror(errno));

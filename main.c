@@ -583,7 +583,8 @@ void cleanup_interface(struct config_interfaces *target, int flag) {
     
     if((wpa.i_akms & IEEE80211_WPA_AKM_8021X) && (!(flag == 8))) {
 
-        printf("removing 80211x stuff\n");    
+        printf("removing 80211x stuff\n");
+		set_bssid(NULL, target->if_name, 0);
         set_wpa8021x(target->if_name, 0);
         kill(target->supplicant_pid, SIGTERM);
         target->supplicant_pid = 0;
@@ -623,7 +624,7 @@ int setup_wlaninterface(struct config_interfaces *target) {
             if(!target->supplicant_pid)
                 target->supplicant_pid = start_wpa_supplicant(target->if_name, target->supplicant_pid, 1);
             cleanup_interface(target, 8);
-            set_bssid((char*)match->ssid_bssid, if_name);
+            set_bssid((char*)match->ssid_bssid, if_name, 1);
             set_wpa8021x(if_name, 1);
             sleep(3);
             config_wpa_supplicant(if_name, match, 1);
