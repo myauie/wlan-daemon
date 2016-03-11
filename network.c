@@ -305,26 +305,28 @@ void set_wpa8021x(char * if_name, int toggle) {
     struct ieee80211_wpaparams wpa;
     struct ifreq ifr;
 
-    if(toggle) {
-
     s = open_socket(AF_INET);
     strlcpy(wpa.i_name, if_name, sizeof(wpa.i_name));
     ifr.ifr_data = (caddr_t)&wpa;
     res = ioctl(s, SIOCG80211WPAPARMS, (caddr_t)&wpa);
 
-    if (res)
+    if(res)
         printf("res: %d (%s)\n", res, strerror(errno));
+        
+    if(toggle)
+        wpa.i_akms = IEEE80211_WPA_AKM_8021X;
+    else
+        wpa.i_akms = IEEE80211_WPA_AKM_PSK;
+        
+    printf("new wpa.i_akms mode is: %d\n", wpa.i_akms);
 
-	wpa.i_akms = IEEE80211_WPA_AKM_8021X;
+	wpa.i_enabled = toggle;
+	
     res = ioctl(s, SIOCS80211WPAPARMS, (caddr_t)&wpa);
     close(s);
 
     if (res)
         printf("res: %d (%s)\n", res, strerror(errno));
-
-    } else
-        wpa.i_akms = toggle;
-        wpa.i_enabled = toggle;
 
 }
 
