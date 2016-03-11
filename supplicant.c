@@ -150,7 +150,7 @@ int config_wpa_supplicant(char* if_name, struct config_ssid *match, int toggle) 
         if(res < 0)
             return res;
 
-        if (match->ssid_key_mgmt) {
+        if (strlen(match->ssid_key_mgmt)) {
 
             res = sup_cmd(repbuf, "SET_NETWORK %d key_mgmt %s", network_number, match->ssid_key_mgmt);
             if(res < 0)
@@ -158,7 +158,7 @@ int config_wpa_supplicant(char* if_name, struct config_ssid *match, int toggle) 
 
         }
 
-        if (match->ssid_pairwise) {
+        if (strlen(match->ssid_pairwise)) {
 
             res = sup_cmd(repbuf, "SET_NETWORK %d pairwise %s", network_number, match->ssid_pairwise);
             if(res < 0)
@@ -166,7 +166,7 @@ int config_wpa_supplicant(char* if_name, struct config_ssid *match, int toggle) 
 
         }
 
-        if (match->ssid_group) {
+        if (strlen(match->ssid_group)) {
 
             res = sup_cmd(repbuf, "SET_NETWORK %d group %s", network_number, match->ssid_group);
             if(res < 0)
@@ -178,74 +178,82 @@ int config_wpa_supplicant(char* if_name, struct config_ssid *match, int toggle) 
         if(res < 0)
             return res;
 
-        if(match->ssid_eap) {
+        if(strlen(match->ssid_eap)) {
 
             res = sup_cmd(repbuf, "SET_NETWORK %d eap %s", network_number, match->ssid_eap);
             if(res < 0)
                 return res;
 
         }
+        
+        if(strlen(match->ssid_phase1)) {
 
-        if(match->ssid_identity) {
-
-            res = sup_cmd(repbuf, "SET_NETWORK %d identity \"%s\"", network_number, match->ssid_identity);
-            if(res < 0)
-                return res;
-
-        }
-
-        if(match->ssid_pass) {
-
-            res = sup_cmd(repbuf, "SET_NETWORK %d password \"%s\"", network_number, match->ssid_pass);
-            if (res < 0)
-                return res;
-
-        }
-
-        if(match->ssid_phase1) {
-
+            printf("phase 1: %s\n", match->ssid_phase1);
             res = sup_cmd(repbuf, "SET_NETWORK %d phase1 \"%s\"", network_number, match->ssid_phase1);
             if (res < 0)
                 return res;
 
         }
 
-        if(match->ssid_phase2) {
+        if(strlen(match->ssid_phase2)) {
 
+            printf("phase 2: %s\n", match->ssid_phase2);
             res = sup_cmd(repbuf, "SET_NETWORK %d phase2 \"%s\"", network_number, match->ssid_phase2);
             if(res < 0)
                 return res;
 
         }
 
-        if(match->ssid_ca_cert) {
+        if(strlen(match->ssid_ca_cert)) {
 
-            res = sup_cmd(repbuf, "SET_NETWORK %d ca_cert \"%s\"", network_number, match->ssid_ca_cert);
+            printf("ca_cert: %s\n", match->ssid_ca_cert);
+            res = sup_cmd(repbuf, "SET_NETWORK %d ca_cert %s", network_number, match->ssid_ca_cert);
             if(res < 0)
                 return res;
 
         }
 
-        if(match->ssid_client_cert) {
+        if(strlen(match->ssid_client_cert)) {
 
-            res = sup_cmd(repbuf, "SET_NETWORK %d client_cert \"%s\"", network_number, match->ssid_client_cert);
+            printf("client_cert: %s\n", match->ssid_client_cert);
+            res = sup_cmd(repbuf, "SET_NETWORK %d client_cert %s", network_number, match->ssid_client_cert);
             if(res < 0)
                 return res;
 
         }
 
-        if(match->ssid_private_key) {
+        if(strlen(match->ssid_private_key)) {
 
-            res = sup_cmd(repbuf, "SET_NETWORK %d private_key \"%s\"", network_number, match->ssid_private_key);
+            printf("private_key: %s\n", match->ssid_private_key);
+            res = sup_cmd(repbuf, "SET_NETWORK %d private_key %s", network_number, match->ssid_private_key);
             if(res < 0)
                 return res;
 
         }
 
-        if(match->ssid_private_key_pwd) {
+        if(strlen(match->ssid_private_key_pwd)) {
 
-            res = sup_cmd(repbuf, "SET_NETWORK %d private_key_passwd \"%s\"", network_number, match->ssid_private_key_pwd);
+            printf("private key password: %s\n", match->ssid_private_key_pwd);
+            res = sup_cmd(repbuf, "SET_NETWORK %d private_key_passwd %s", network_number, match->ssid_private_key_pwd);
             if(res < 0)
+                return res;
+
+        }
+
+        if(strlen(match->ssid_identity)) {
+
+            printf("identity: %s\n", match->ssid_identity);
+            res = sup_cmd(repbuf, "SET_NETWORK %d identity \"%s\"", network_number, match->ssid_identity);
+            if(res < 0)
+                return res;
+
+        }
+
+        if(strlen(match->ssid_pass)) {
+
+            printf("pass: %s\n", match->ssid_pass);
+            res = sup_cmd(repbuf, "SET_NETWORK %d password \"%s\"", network_number, match->ssid_pass);
+            if (res < 0)
                 return res;
 
         }
