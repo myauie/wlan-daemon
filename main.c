@@ -563,7 +563,7 @@ void cleanup_interface(struct config_interfaces *target, int flag) {
 	
 	close(s);
 	
-	printf("%d\n", nwkey.i_wepon);
+	printf("nwkey wep on: %d\n", nwkey.i_wepon);
     
     if(nwkey.i_wepon && (!(flag == 2))) {
 
@@ -572,7 +572,7 @@ void cleanup_interface(struct config_interfaces *target, int flag) {
         
     }
     
-    printf("%d\n", psk.i_enabled);
+    printf("psk enabled: %d\n", psk.i_enabled);
 
     if(psk.i_enabled && (!(flag == 4))) {
     
@@ -620,10 +620,12 @@ int setup_wlaninterface(struct config_interfaces *target) {
         if (strcmp(match->ssid_auth, "802.1x") == 0) {
 
             printf("do 8021x stuff\n");
+            if(!target->supplicant_pid)
+                target->supplicant_pid = start_wpa_supplicant(target->if_name, target->supplicant_pid, 1);
             cleanup_interface(target, 8);
             set_bssid((char*)match->ssid_bssid, if_name);
             set_wpa8021x(if_name, 1);
-            start_wpa_supplicant(target->if_name, target->supplicant_pid, 1);
+            sleep(3);
             config_wpa_supplicant(if_name, match, 1);
 
         } else if(strcmp(match->ssid_auth, "wpa") == 0) {
@@ -727,7 +729,8 @@ int setup_ethernetinterface(struct config_interfaces *cur) {
         
             // do supplicant stuff
 
-            start_wpa_supplicant(cur->if_name, cur->supplicant_pid, 0);
+            if(!cur->supplicant_pid)
+                cur->supplicant_pid = start_wpa_supplicant(cur->if_name, cur->supplicant_pid, 0);
             config_wpa_supplicant(cur->if_name, match, 1);
         
         }
