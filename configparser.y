@@ -121,18 +121,16 @@ eaptype: tls | ttls | peap | md5
 tls: TLS
         {
             if(strlen(cur_ssid->ssid_eap) > 0)
-                strlcat(cur_ssid->ssid_eap, " TLS", sizeof(cur_ssid->ssid_eap));
-            else
-                snprintf(cur_ssid->ssid_eap, sizeof(cur_ssid->ssid_eap), "TLS");        
+                strlcat(cur_ssid->ssid_eap, " ", 40);
+            strlcat(cur_ssid->ssid_eap, "TLS", 40);        
         }
 
 ttls: TTLS
         {
         
             if(strlen(cur_ssid->ssid_eap) > 0)
-                strlcat(cur_ssid->ssid_eap, " TTLS", sizeof(cur_ssid->ssid_eap));
-            else
-                snprintf(cur_ssid->ssid_eap, sizeof(cur_ssid->ssid_eap), "TTLS");
+                strlcat(cur_ssid->ssid_eap, " ", 40);
+            strlcat(cur_ssid->ssid_eap, "TTLS", 40);
         
         }
         
@@ -140,18 +138,16 @@ peap: PEAP
         
         {
             if(strlen(cur_ssid->ssid_eap) > 0)
-                strlcat(cur_ssid->ssid_eap, " PEAP", sizeof(cur_ssid->ssid_eap));
-            else
-                snprintf(cur_ssid->ssid_eap, sizeof(cur_ssid->ssid_eap), "PEAP");
+                strlcat(cur_ssid->ssid_eap, " ", 40);
+            strlcat(cur_ssid->ssid_eap, "PEAP", 40);
         
         }
         
 md5: MD5
         {
             if(strlen(cur_ssid->ssid_eap) > 0)
-                strlcat(cur_ssid->ssid_eap, " MD5", sizeof(cur_ssid->ssid_eap));
-            else
-                snprintf(cur_ssid->ssid_eap, sizeof(cur_ssid->ssid_eap), "MD5");
+                strlcat(cur_ssid->ssid_eap, " ", 40);
+            strlcat(cur_ssid->ssid_eap, "MD5", 40);
         }
 
 key_mgmt: KEY STRING
@@ -183,17 +179,15 @@ grouptype: ccmp | tkip
 ccmp: CCMP
         {
             if(strlen(cur_ssid->ssid_group) > 0)
-                strlcat(cur_ssid->ssid_group, " CCMP", sizeof(cur_ssid->ssid_group));
-            else
-                snprintf(cur_ssid->ssid_group, sizeof(cur_ssid->ssid_group), "CCMP");          
+                strlcat(cur_ssid->ssid_group, " ", 15);
+            strlcat(cur_ssid->ssid_group, "CCMP", 15);          
         }
         
 tkip: TKIP
         {
             if(strlen(cur_ssid->ssid_group) > 0)
-                strlcat(cur_ssid->ssid_group, " TKIP", sizeof(cur_ssid->ssid_group));
-            else
-                snprintf(cur_ssid->ssid_group, sizeof(cur_ssid->ssid_group), "TKIP");         
+                strlcat(cur_ssid->ssid_group, " ", 15);
+            strlcat(cur_ssid->ssid_group, "TKIP", 15);         
         }
 
 pairwise: PAIRWISE pairwisetypes
@@ -205,17 +199,15 @@ pairwisetype: ccmp | tkip
 ccmp: CCMP
         {
             if(strlen(cur_ssid->ssid_pairwise) > 0)
-                strlcat(cur_ssid->ssid_pairwise, " CCMP", sizeof(cur_ssid->ssid_pairwise));
-            else
-                snprintf(cur_ssid->ssid_pairwise, sizeof(cur_ssid->ssid_pairwise), "CCMP");        
+                strlcat(cur_ssid->ssid_pairwise, " ", 15);
+            strlcat(cur_ssid->ssid_pairwise, "CCMP", 15);        
         }
 
 tkip: TKIP
         {
             if(strlen(cur_ssid->ssid_pairwise) > 0)
-                strlcat(cur_ssid->ssid_pairwise, " TKIP", sizeof(cur_ssid->ssid_pairwise));
-            else
-                snprintf(cur_ssid->ssid_pairwise, sizeof(cur_ssid->ssid_pairwise), "TKIP");         
+                strlcat(cur_ssid->ssid_pairwise, " ", 15);
+            strlcat(cur_ssid->ssid_pairwise, "TKIP", 15);         
         }
 
 ca_cert: CA_CERT STRING
