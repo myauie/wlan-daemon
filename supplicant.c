@@ -35,7 +35,7 @@ int start_wpa_supplicant(char* if_name, pid_t supplicant_pid, int flag) {
     } else if(supplicant_pid) { // parent
 
         printf("forked, pid=%d\n", supplicant_pid);
-        return 0;
+        return supplicant_pid;
 
     } else { // child
 
@@ -107,30 +107,77 @@ int sup_cmd(char *result, char *cmd, ...) {
     vsnprintf(cmdbuf, 256, cmd, args);
     va_end(args);
 
-    printf("%s (%d)\n", cmdbuf, strlen(cmdbuf));
     res = wpa_ctrl_request(wpa_client, cmdbuf, strlen(cmdbuf), result, &replen, wpa_unsolicited);
-    printf("%s (%d)\n", result, res);
 
     if (res)
         return res;
 
 }
 
-int config_wpa_supplicant(char* if_name, struct config_ssid *match, int toggle) {
+int connect_wpa_supplicant(char* if_name) {
 
-    char unixsock[256], repbuf[256];
-    int res, network_number = -1;
+    char unixsock[256];
 
     snprintf(unixsock, 256, "%s/%s", wpa_daemon_ctrl, if_name);
     printf("starting wpa_supplicant conversation\n");
 
-    if (!wpa_client)
+    if (!wpa_client)   
+        wpa_ctrl_close(wpa_client);
+        
+    wpa_client = 0;
+    
+    for(int retries = 3; retries > 0; retries--) {
+    
         wpa_client = wpa_ctrl_open(unixsock);
+        if(wpa_client)
+            break;
+        sleep(2);
+        
+    }
 
     if (!wpa_client) {
         printf("failed to create wpa_supplicant connection\n");
         return 0;
     }
+    
+    return 1;
+    
+}
+
+int status_wpa_supplicant(char * if_name) {
+
+    char *cmd = "STATUS", result[1024], key[40], val[60], *cur = 0;
+    int bytes;
+    
+    if(!connect_wpa_supplicant(if_name))
+        return 0;
+        
+    if(!sup_cmd(result, cmd))
+        return 0;
+        
+    cur = result;
+    
+    while(*cur != 0) {
+    
+        sscanf(cur, "%[^=]=%[^\n]\n%n", key, val, &bytes);
+        cur += bytes;
+        
+        if(strcmp(key, "suppPortStatus") == 0 && strcmp(val, "Authorized") == 0)
+            return 1;
+    
+    }
+    
+    return 0;
+
+}
+
+int config_wpa_supplicant(char* if_name, struct config_ssid *match, int toggle) {
+
+    char repbuf[256];
+    int res, network_number = -1, wait = 5;
+    
+    if(!connect_wpa_supplicant(if_name))
+        return 0;
 
     if(toggle) {
 
@@ -285,14 +332,23 @@ int config_wpa_supplicant(char* if_name, struct config_ssid *match, int toggle) 
         res = sup_cmd(repbuf, "REASSOCIATE");
         if(res < 0)
             return res;
+            
+        for(wait = 5; wait > 0; wait--) {
+        
+            if(status_wpa_supplicant(if_name))
+                break;
+            sleep(5);
+        
+        }
 
     } else {
 
-        res = sup_cmd(repbuf, "REMOVE_NETWORK all");
+        res = sup_cmd(repbuf, "DISABLE_NETWORK all");
         if(res < 0)
             return res;
 
-        res = sup_cmd(repbuf, "DISABLE_NETWORK all");
+
+        res = sup_cmd(repbuf, "REMOVE_NETWORK all");
         if(res < 0)
             return res;
 
@@ -300,6 +356,6 @@ int config_wpa_supplicant(char* if_name, struct config_ssid *match, int toggle) 
 
     wpa_ctrl_close(wpa_client);
     wpa_client = 0;
-    sleep(10);
+    return res;
 
 }
