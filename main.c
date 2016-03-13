@@ -586,7 +586,8 @@ void cleanup_interface(struct config_interfaces *target, int flag) {
         printf("removing 80211x stuff\n");
 		set_bssid(NULL, target->if_name, 0);
         set_wpa8021x(target->if_name, 0);
-        kill(target->supplicant_pid, SIGTERM);
+        if(target->supplicant_pid)
+            kill(target->supplicant_pid, SIGTERM);
         target->supplicant_pid = 0;
     }
     

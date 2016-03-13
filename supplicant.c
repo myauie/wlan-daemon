@@ -57,9 +57,8 @@ int start_wpa_supplicant(char* if_name, pid_t supplicant_pid, int flag) {
 
         args[arg++] = "-C";
         args[arg++] = wpa_daemon_ctrl;
-        args[arg++] = "-N";
 
-        args[--arg] = 0;
+        args[arg] = 0;
         execv("/usr/local/sbin/wpa_supplicant", args);
 		printf("!!! wpa_supplicant error\n");
 
@@ -98,7 +97,7 @@ int sup_cmd(char *result, char *cmd, ...) {
     va_list args;
     int res;
     char cmdbuf[256];
-    size_t replen = 256;
+    size_t replen = 512;
 
     if (!wpa_client)
         return -1; // not attached
@@ -146,18 +145,18 @@ int connect_wpa_supplicant(char* if_name) {
 
 int status_wpa_supplicant(char * if_name) {
 
-    char *cmd = "STATUS", result[1024], key[40], val[60], *cur = 0;
     int bytes;
     
+    char *cmd = "STATUS", result[512], key[40], val[60], *cur = 0;
     if(!connect_wpa_supplicant(if_name))
         return 0;
         
-    if(!sup_cmd(result, cmd))
+    if(sup_cmd(result, cmd) == -1);
         return 0;
         
     cur = result;
     
-    while(*cur != 0) {
+    for(int i = 0; i < 13; i++) {
     
         sscanf(cur, "%[^=]=%[^\n]\n%n", key, val, &bytes);
         cur += bytes;

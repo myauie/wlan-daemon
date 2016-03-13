@@ -262,6 +262,7 @@ int set_psk_key(char *nwid, char *psk_key, char * if_name, int toggle) {
     if (res)
         printf("res: %d (%s)\n", res, strerror(errno));
 
+    wpa.i_akms = IEEE80211_WPA_AKM_PSK;
     wpa.i_enabled = psk.i_enabled;
     res = ioctl(s, SIOCS80211WPAPARMS, (caddr_t)&wpa);
     close(s);
@@ -289,10 +290,11 @@ void set_bssid(char *network_bssid, char * if_name, int toggle) {
         printf("invalid ethernet address: %s\n", network_bssid);
 
     memcpy(&bssid.i_bssid, ea->ether_addr_octet, sizeof(bssid.i_bssid));
-    strlcpy(bssid.i_name, if_name, sizeof(bssid.i_name));
     
     } else
         memset(&bssid.i_bssid, 0, sizeof(bssid.i_bssid));
+    
+    strlcpy(bssid.i_name, if_name, sizeof(bssid.i_name));    
 
     if (!s)
         printf("error opening socket: %s\n", strerror(errno));
@@ -312,6 +314,7 @@ void set_wpa8021x(char * if_name, int toggle) {
     struct ifreq ifr;
 
     s = open_socket(AF_INET);
+    memset(&wpa, 0, sizeof(wpa));
     strlcpy(wpa.i_name, if_name, sizeof(wpa.i_name));
     ifr.ifr_data = (caddr_t)&wpa;
     res = ioctl(s, SIOCG80211WPAPARMS, (caddr_t)&wpa);
