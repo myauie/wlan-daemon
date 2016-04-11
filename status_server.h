@@ -3,7 +3,7 @@
 
 #include "status.h"
 
-int open_status_socket();
-void update_status(enum wd_events stat, char *msg);
+int 		open_status_socket();
+void 		update_status(enum wd_events stat, char *msg);
 
 #endif
