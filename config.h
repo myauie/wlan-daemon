@@ -43,9 +43,9 @@ char 		ncsi_ping[80];
 extern const char config_file[];
 extern struct config_interfaces *config;
 
-void 		clear_ssid(struct config_ssid);
-void 		clear_config(struct config_interfaces);
+void 		clear_ssid(struct config_ssid *);
+void 		clear_config(struct config_interfaces *);
 int 		parse_config();
-struct config_interfaces *find_config(char);
+struct config_interfaces *find_config(char *);
 
-#endif	/* // CONFIGREADER_H */
+#endif	/* CONFIGREADER_H */
