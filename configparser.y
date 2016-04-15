@@ -24,9 +24,9 @@ struct config_ssid *cur_ssid = 0;
     int num;
 };
 
-%token STRING OPEN_BRACE CLOSE_BRACE USER PASS IPV6AUTO EAP KEY IDENTITY PHASE1 PHASE2 GROUP
-%token PAIRWISE CA_CERT CLIENT_CERT PRIVATE_KEY PRIVATE_KEY_PW PING SCRIPT POLL 
-%token TLS TTLS PEAP MD5 NUMBER CCMP TKIP
+%token STRING OPEN_BRACE CLOSE_BRACE PASS IPV6AUTO EAP KEY IDENTITY ANONYMOUS PHASE1 PHASE2
+%token GROUP PAIRWISE CA_CERT CLIENT_CERT PRIVATE_KEY PRIVATE_KEY_PW PING SCRIPT POLL 
+%token TLS TTLS PEAP MD5 NUMBER CCMP TKIP WPA_EAP IEEE8021X
 %type <str> STRING
 %type <num> NUMBER
 
@@ -93,14 +93,9 @@ ssid_name: STRING
     
 ssid_options: ssid_options ssid_option | ssid_option
     
-ssid_option: user_name | password | identity | eap | key_mgmt
+ssid_option: password | identity | anonymous | eap | key_mgmt
     | phase1 | phase2 | script | group | pairwise | ca_cert | client_cert
     | private_key | private_key_passwd
-
-user_name: USER STRING
-	{
-                strlcpy(cur_ssid->ssid_user, $2, 32);
-	}
 	
 password: PASS STRING
 	{
@@ -110,6 +105,11 @@ password: PASS STRING
 identity: IDENTITY STRING
         {
                 strlcpy(cur_ssid->ssid_identity, $2, 32);
+        }
+        
+anonymous: ANONYMOUS STRING
+        {
+                strlcpy(cur_ssid->ssid_anonymous, $2, 32);
         }
 
 eap: EAP eaptypes
@@ -150,10 +150,28 @@ md5: MD5
             strlcat(cur_ssid->ssid_eap, "MD5", 40);
         }
 
-key_mgmt: KEY STRING
+key_mgmt: KEY keytypes
+
+keytypes: keytypes keytype | keytype
+
+keytype: wpa_eap | ieee8021x
+
+wpa_eap: WPA_EAP
+        
         {
-                strlcpy(cur_ssid->ssid_key_mgmt, $2, 40);
+            if(strlen(cur_ssid->ssid_key_mgmt) > 0)
+                strlcat(cur_ssid->ssid_key_mgmt, " ", 40);
+            strlcat(cur_ssid->ssid_key_mgmt, "WPA-EAP", 40);
+        
         }
+        
+ieee8021x: IEEE8021X
+        {
+            if(strlen(cur_ssid->ssid_key_mgmt) > 0)
+                strlcat(cur_ssid->ssid_key_mgmt, " ", 40);
+            strlcat(cur_ssid->ssid_key_mgmt, "IEEE8021X", 40);
+        }
+
         
 phase1: PHASE1 STRING
         {
