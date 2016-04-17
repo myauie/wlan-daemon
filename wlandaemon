@@ -1,0 +1,10 @@
+#!/bin/sh
+#
+
+daemon="/usr/bin/wlan-daemon"
+daemon_user=root
+
+. /etc/rc.d/rc.subr
+
+rc_cmd $1
+

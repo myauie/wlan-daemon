@@ -664,9 +664,9 @@ check_interface(struct config_interfaces * cur) {
 
 int 
 main(int count, char **options) {
-        //int 		res;
-        //res = daemon(0, 0);
-        //printf("return value: %s\n", res);
+        int 		res;
+        res = daemon(0, 0);
+        printf("return value: %s\n", res);
         res_init();
         _res.retrans = 4;
         _res.retry = 2;
