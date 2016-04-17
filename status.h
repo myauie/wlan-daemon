@@ -4,7 +4,8 @@
 enum wd_events {
         CONNECTING,
         CONNECTED,
-        AUTH_REQUIRED
+        AUTH_REQUIRED,
+        CUSTOM_AUTH
 };
 
 struct wd_event {

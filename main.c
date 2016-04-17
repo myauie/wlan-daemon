@@ -168,7 +168,10 @@ internet_connectivity_check(struct config_ssid * match) {
 int 
 hotspot(struct config_ssid * match) {
         /* Use xdg-open default web browser if nothing is specified. */
-        update_status(AUTH_REQUIRED, "www.google.com");
+        if (match->additional_auth_script[0])
+            update_status(CUSTOM_AUTH, match->additional_auth_script);
+        else
+            update_status(AUTH_REQUIRED, "www.google.com");
         config->additional_auth_exec = 1;
         return 1;
 }
@@ -277,7 +280,7 @@ network_matches(char *if_name, struct config_ssid * match) {
         /*
          * Switch over if new network is higher RSSI value than (old*1.5).
          */
-        if ((match->ssid_rssi) > (nr.nr_rssi * 1.5)) {
+        if (new_rssi > (old_rssi * 1.5)) {
             printf("switching over to new network\n");
             return 0;
         } else {
@@ -540,6 +543,7 @@ setup_wlaninterface(struct config_interfaces * target) {
 		             *  If we are successfully connected to the network
 		             *  and we don't need additional auth, then we are good.
 		             */
+		            sleep(1);
                     res = internet_connectivity_check(match);
                     if (res == 1) {
                         update_status(CONNECTED, match->ssid_name);

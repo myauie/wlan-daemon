@@ -219,7 +219,13 @@ config_wpa_supplicant(char *if_name, struct config_ssid * match, int toggle) {
                 res = sup_cmd(repbuf, "SET_NETWORK %d identity \"%s\"", network_number, match->ssid_identity);
                 if (res < 0)
                     return res;
-            } 
+            }
+            if (strlen(match->ssid_anonymous)) {
+                printf("anonymous identity: %s\n", match->ssid_anonymous);
+                res = sup_cmd(repbuf, "SET_NETWORK %d anonymous_identity \"%s\"", network_number, match->ssid_anonymous);
+                if (res < 0)
+                    return res;
+            }                        
             if (strlen(match->ssid_pass)) {
                 printf("pass: %s\n", match->ssid_pass);
                 res = sup_cmd(repbuf, "SET_NETWORK %d password \"%s\"", network_number, match->ssid_pass);

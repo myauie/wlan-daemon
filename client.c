@@ -51,6 +51,10 @@ main(int argc, char **argv) {
                     snprintf(cmd, sizeof(cmd), "xdg-open http://%s/", ev.message);
                     system(cmd);
                     break;
+                case CUSTOM_AUTH:
+                    printf("custom authorisation: %s\n", ev.message);
+                    system(ev.message);
+                    break;
                 default:
                     printf("unknown event type\n");
                     break;
