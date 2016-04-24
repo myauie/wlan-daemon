@@ -602,8 +602,7 @@ setup_ethernetinterface(struct config_interfaces * cur) {
             if (strcmp(cur->ssids->ssid_auth, "802.1x") == 0) {
                 /* Do supplicant stuff. */
                 if (!cur->supplicant_pid)
-                    cur->supplicant_pid = start_wpa_supplicant(cur->if_name, cur->supplicant_pid, 1);
-                cleanup_interface(cur, 1);
+                    cur->supplicant_pid = start_wpa_supplicant(cur->if_name, cur->supplicant_pid, 0);
                 sleep(3);
                 config_wpa_supplicant(cur->if_name, match, 1);
             }

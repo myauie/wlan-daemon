@@ -246,7 +246,8 @@ config_wpa_supplicant(char *if_name, struct config_ssid * match, int toggle) {
                 if (res < 0)
                     return res;
             }
-            res = sup_cmd(repbuf, "SET_NETWORK %d ssid \"%s\"", network_number, match->ssid_name);
+            if (match->ssid_name)
+                res = sup_cmd(repbuf, "SET_NETWORK %d ssid \"%s\"", network_number, match->ssid_name);             
             if (res < 0)
                 return res;
             res = sup_cmd(repbuf, "SELECT_NETWORK %d", network_number);
