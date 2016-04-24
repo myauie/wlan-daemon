@@ -146,21 +146,22 @@ internet_connectivity_check(struct config_ssid * match) {
         if (res)
             printf("res: %d (%s)\n", res, strerror(errno));
         /*
-         *  Check if a 302 redirect response has been received.
+         *  Check if a redirect response has been received.
          *  If we do, this means it is a hotspot.
          */
         printf("%s\n", input);
         strncpy(cmp, input + 9, 3);
         printf("%s\n", cmp);
-        if (strcmp(cmp, "302") == 0) {
+        
+        if ((cmp[0] == '3' && cmp[1] == '0') || (strcmp(cmp, "511") == 0)) {
             /*
              * Network requires additional auth; execute user-defined
              * action.
              */
-            printf("302 redirect\n");
+            printf("redirect\n");
             return 2;
         } else
-            printf("200 OK\n");
+            printf("no redirect\n");
         close(s);
         return 1;
 }
@@ -601,7 +602,9 @@ setup_ethernetinterface(struct config_interfaces * cur) {
             if (strcmp(cur->ssids->ssid_auth, "802.1x") == 0) {
                 /* Do supplicant stuff. */
                 if (!cur->supplicant_pid)
-                    cur->supplicant_pid = start_wpa_supplicant(cur->if_name, cur->supplicant_pid, 0);
+                    cur->supplicant_pid = start_wpa_supplicant(cur->if_name, cur->supplicant_pid, 1);
+                cleanup_interface(cur, 1);
+                sleep(3);
                 config_wpa_supplicant(cur->if_name, match, 1);
             }
             if (cur->ipv6_auto)
@@ -665,8 +668,11 @@ check_interface(struct config_interfaces * cur) {
 int 
 main(int count, char **options) {
         int 		res;
-        res = daemon(0, 0);
-        printf("return value: %s\n", res);
+        
+        if (strcmp(options[1], "-d") != 0) {
+            res = daemon(0, 0);
+            printf("return value: %s\n", res);        
+        }
         res_init();
         _res.retrans = 4;
         _res.retry = 2;

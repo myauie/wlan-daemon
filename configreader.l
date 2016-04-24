@@ -30,6 +30,7 @@ ca_cert:                return CA_CERT;
 client_cert:            return CLIENT_CERT;
 private_key:            return PRIVATE_KEY;
 private_key_passwd:     return PRIVATE_KEY_PW;
+eapol_flags:            return EAPOL_FLAGS;
 ping:                   return PING;
 poll:                   return POLL;
 additional_auth_script: return SCRIPT;

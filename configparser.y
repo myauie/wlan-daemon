@@ -25,7 +25,7 @@ struct config_ssid *cur_ssid = 0;
 };
 
 %token STRING OPEN_BRACE CLOSE_BRACE PASS IPV6AUTO EAP KEY IDENTITY ANONYMOUS PHASE1 PHASE2
-%token GROUP PAIRWISE CA_CERT CLIENT_CERT PRIVATE_KEY PRIVATE_KEY_PW PING SCRIPT POLL 
+%token GROUP PAIRWISE CA_CERT CLIENT_CERT PRIVATE_KEY PRIVATE_KEY_PW EAPOL_FLAGS PING SCRIPT POLL 
 %token TLS TTLS PEAP MD5 NUMBER CCMP TKIP WPA_EAP IEEE8021X
 %type <str> STRING
 %type <num> NUMBER
@@ -37,16 +37,12 @@ config_item: poll | ncsi | interface_set
 
 poll: POLL NUMBER
     {
-    
         poll_wait = $2;
-    
     }
 
 ncsi: PING STRING
     {
-    
-        strlcpy(ncsi_ping, $2, 80);           
-    
+        strlcpy(ncsi_ping, $2, 80);
     }
     
 interface_set: interface_name OPEN_BRACE ssid_set CLOSE_BRACE
@@ -95,7 +91,7 @@ ssid_options: ssid_options ssid_option | ssid_option
     
 ssid_option: password | identity | anonymous | eap | key_mgmt
     | phase1 | phase2 | script | group | pairwise | ca_cert | client_cert
-    | private_key | private_key_passwd
+    | private_key | private_key_passwd | eapol_flags
 	
 password: PASS STRING
 	{
@@ -127,20 +123,16 @@ tls: TLS
 
 ttls: TTLS
         {
-        
             if(strlen(cur_ssid->ssid_eap) > 0)
                 strlcat(cur_ssid->ssid_eap, " ", 40);
             strlcat(cur_ssid->ssid_eap, "TTLS", 40);
-        
         }
         
 peap: PEAP
-        
         {
             if(strlen(cur_ssid->ssid_eap) > 0)
                 strlcat(cur_ssid->ssid_eap, " ", 40);
             strlcat(cur_ssid->ssid_eap, "PEAP", 40);
-        
         }
         
 md5: MD5
@@ -157,12 +149,10 @@ keytypes: keytypes keytype | keytype
 keytype: wpa_eap | ieee8021x
 
 wpa_eap: WPA_EAP
-        
         {
             if(strlen(cur_ssid->ssid_key_mgmt) > 0)
                 strlcat(cur_ssid->ssid_key_mgmt, " ", 40);
             strlcat(cur_ssid->ssid_key_mgmt, "WPA-EAP", 40);
-        
         }
         
 ieee8021x: IEEE8021X
@@ -247,7 +237,12 @@ private_key_passwd: PRIVATE_KEY_PW STRING
         {
                 strlcpy(cur_ssid->ssid_private_key_pwd, $2, 50);        
         }
-
+        
+eapol_flags: EAPOL_FLAGS NUMBER
+        {
+                cur_ssid->ssid_eapol = (int *) malloc(sizeof(int));
+                *cur_ssid->ssid_eapol = $2;
+        }
 %%
 
 void yyerror(const char *str) {

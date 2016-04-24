@@ -213,7 +213,13 @@ config_wpa_supplicant(char *if_name, struct config_ssid * match, int toggle) {
                 res = sup_cmd(repbuf, "SET_NETWORK %d private_key_passwd %s", network_number, match->ssid_private_key_pwd);
                 if (res < 0)
                     return res;
-            } 
+            }
+			if (match->ssid_eapol) {
+                printf("eapol_flags: %d\n", match->ssid_eapol);
+                res = sup_cmd(repbuf, "SET_NETWORK %d eapol_flags %d", network_number, *match->ssid_eapol);
+                if (res < 0)
+                    return res;
+            }
             if (strlen(match->ssid_identity)) {
                 printf("identity: %s\n", match->ssid_identity);
                 res = sup_cmd(repbuf, "SET_NETWORK %d identity \"%s\"", network_number, match->ssid_identity);

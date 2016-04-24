@@ -7,10 +7,9 @@
 extern struct config_interfaces *cur_if;
 extern struct config_ssid *cur_ssid;
 FILE           *yyin;
-int 		yyparse   ();
+int 		    yyparse();
 
-const char 	config_file[] = "/etc/wlan-daemon.config";
-//const char 	config_file[] = "./wlan-daemon.conf";
+const char 	config_file[] = "/etc/wlan-daemon.conf";
 
 void 
 clear_ssid(struct config_ssid * ssid) {

@@ -24,6 +24,8 @@ struct config_ssid {
 	char 		ssid_client_cert[50];
 	char 		ssid_private_key[50];
 	char 		ssid_private_key_pwd[50];
+    char        ssid_anonymous[50];
+    int        *ssid_eapol;
 	char 		additional_auth_script[50];
 	struct config_ssid *next;
 };
